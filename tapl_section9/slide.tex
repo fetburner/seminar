@@ -1,0 +1,473 @@
+\documentclass[dvipdfmx,cjk,xcolor=dvipsnames,envcountsect,notheorems,aspectratio=169]{beamer}
+
+\usepackage{amsmath,amssymb,amsfonts,amsthm,ascmac,cases,bm,pifont}
+\usepackage{pxjahyper}
+\usepackage{graphicx}
+\usepackage{url}
+\usepackage{bussproofs}
+
+\usetheme{sumiilab}
+
+\title{9章 単純型付きラムダ計算}
+\author{水野 雅之}
+\date{2015年5月14日}
+
+\AtBeginSection[]{
+\begin{frame}
+  \frametitle{アウトライン}
+  \tableofcontents[sectionstyle=show/shaded,subsectionstyle=show/show/hide]
+\end{frame}}
+
+\setbeamertemplate{theorems}[numbered]
+\theoremstyle{definition}
+\newtheorem{definition}{定義}
+\newtheorem{axiom}{公理}
+\newtheorem{theorem}{定理}
+\newtheorem{lemma}{補題}
+\newtheorem{corollary}{系}
+\newtheorem{proposition}{命題}
+
+\usepackage{listings,jlisting}
+
+\newcommand{\BOOL}{\texttt{Bool}}
+\newcommand{\TRUE}{\texttt{true}}
+\newcommand{\FALSE}{\texttt{false}}
+\newcommand{\IF}{\texttt{if}}
+\newcommand{\THEN}{\texttt{then}}
+\newcommand{\ELSE}{\texttt{else}}
+
+\begin{document}
+\frame[plain]{\titlepage}
+
+\section*{アウトライン}
+
+\begin{frame}
+  \frametitle{アウトライン}
+  \tableofcontents[sectionstyle=show,subsectionstyle=hide]
+\end{frame}
+
+\section{関数型}
+
+\begin{frame}
+  \frametitle{動機}
+	\Large 8章で定義したように, 好ましい性質を持った型システムをラムダ計算に対しても定義したい
+  \begin{itemize}
+  \item 型安全
+		\begin{itemize}
+		\item 型保存定理
+		\item 進行定理
+		\end{itemize}
+  \item 保守的過ぎない
+		\begin{itemize}
+		\item 書きたいプログラムに型が付けられる
+		\end{itemize}
+	\end{itemize}
+\end{frame}
+
+\begin{frame}
+  \frametitle{arrow type}
+	\Large 関数は全て$\rightarrow$という型(arrow type)を持つ事にしてはどうか?
+	\[\lambda x.t:\rightarrow\]
+  \vfill
+	問題点:
+	\begin{itemize}
+	\item どのような値を返すかの情報を欠いている
+		\begin{itemize}
+		\item $\lambda x.x : \rightarrow$と$\lambda x.\lambda y.y : \rightarrow$
+		\end{itemize}
+	\item 引数の型が分からないため, 関数が呼び出された際の振る舞いを検査できない
+		\begin{itemize}
+		\item $\lambda b.\IF~b~\THEN~\FALSE~\ELSE~\TRUE : \rightarrow$
+		\end{itemize}
+	\end{itemize}
+\end{frame}
+
+\begin{frame}
+  \frametitle{関数型}
+	\Large 関数型に引数と戻り値の型の情報を持たせる
+	\begin{definition}[単純型]
+		\[
+			\begin{array}{rl@{\qquad\qquad}r}
+				T ::=
+				& & \mbox{型:} \\
+				& T \rightarrow T & \mbox{関数の型} \\
+				& \BOOL & \mbox{真偽値の型} \\
+			\end{array}
+		\]
+	\end{definition}
+	例:$\BOOL \rightarrow \BOOL$, $(\BOOL \rightarrow \BOOL)\rightarrow \BOOL \rightarrow \BOOL$ \\
+	$\rightarrow$は右結合
+\end{frame}
+
+\section{型付け関係}
+
+\begin{frame}
+  \frametitle{引数の型付け}
+	\Large 引数の型をどのように知れば良いだろうか? \\
+	型注釈を付ける$\cdots$ \structure{明示的に型付けされた言語} \\
+	\begin{itemize}
+	\item $\lambda x:T.~t$
+	\end{itemize}
+	型推論する$\cdots$ \structure{暗幕的に型付けされた言語}
+	\vfill
+	この章では明示的に型付けされた言語を扱う
+\end{frame}
+
+\begin{frame}
+	\frametitle{$\lambda$抽象の型付け}
+	\Large $\lambda$抽象$\lambda x:T.~t$の型付け規則は,
+	項$t$に出現した変数$x$の型を$T$であるとみなす事で得られる
+	\begin{prooftree}
+		\AxiomC{$x : T_1 \vdash t : T_2$}
+		\RightLabel{\textsc{T-Abs}}
+		\UnaryInfC{$\vdash \lambda x.~t : T_1 \to T_2$}
+	\end{prooftree}
+	ネストしうる$\lambda$抽象に一般化
+	\begin{prooftree}
+		\AxiomC{$\Gamma, x : T_1 \vdash t : T_2$}
+		\RightLabel{\textsc{T-Abs}}
+		\UnaryInfC{$\Gamma \vdash \lambda x.~t : T_1 \to T_2$}
+	\end{prooftree}
+	$\Gamma~\cdots~t$上の自由変数を型付けする際の前提(\structure{型環境})
+\end{frame}
+
+\begin{frame}
+	\frametitle{型環境}
+	\Large 型環境 : 変数とその型の列
+	\[
+		\begin{array}{rl@{\qquad\qquad}r}
+			T ::=
+			& & \mbox{型環境:} \\
+			& \emptyset & \mbox{空の環境} \\
+			& \Gamma, x : T & \mbox{項変数の束縛} \\
+		\end{array}
+	\]
+  \begin{block}{この教科書でのお約束}
+    新しい束縛と既に$\Gamma$に現れている束縛を混同する事の無いよう,
+		$x$は$\Gamma$で束縛されているものとは異なるように選ばれる
+  \end{block}
+	$\Gamma$に束縛された変数の集合をdom($\Gamma$)と書く
+\end{frame}
+
+\begin{frame}
+	\frametitle{変数の型付け}
+	\Large 変数にはその文脈で持つと仮定された型を付ければ良い
+	\begin{prooftree}
+		\AxiomC{$x : T \in \Gamma$}
+		\RightLabel{\textsc{T-Var}}
+		\UnaryInfC{$\Gamma \vdash x : T$}
+	\end{prooftree}
+	\vfill
+	これまでの型付け規則を用いた例:
+	\large
+	\begin{prooftree}
+		\AxiomC{$x : \BOOL \in x : \BOOL, y : \BOOL \to \BOOL$}
+		\RightLabel{\textsc{T-Var}}
+		\UnaryInfC{$x : \BOOL, y : \BOOL \to \BOOL \vdash x : \BOOL$}
+		\RightLabel{\textsc{T-Abs}}
+		\UnaryInfC{$x : \BOOL \vdash \lambda y : \BOOL \to \BOOL.~x : (\BOOL \to \BOOL) \to \BOOL$}
+		\RightLabel{\textsc{T-Abs}}
+		\UnaryInfC{$\vdash \lambda x : \BOOL.~\lambda y : \BOOL \to \BOOL.~x : \BOOL \to (\BOOL \to \BOOL) \to \BOOL$}
+	\end{prooftree}
+\end{frame}
+
+\begin{frame}
+	\frametitle{関数適用の型付け}
+	\Large 
+	\begin{prooftree}
+		\AxiomC{$\Gamma \vdash t_1 : T_{11} \to T_{12}$}
+		\AxiomC{$\Gamma \vdash t_2 : T_{11}$}
+		\RightLabel{\textsc{T-App}}
+		\BinaryInfC{$\Gamma \vdash t_1~t_2 : T_{12}$}
+	\end{prooftree}
+	例:
+	\large
+	\begin{prooftree}
+		\AxiomC{$x : \BOOL \in x : \BOOL$}
+		\RightLabel{\textsc{T-Var}}
+		\UnaryInfC{$x : \BOOL \vdash x : \BOOL$}
+		\RightLabel{\textsc{T-Abs}}
+		\UnaryInfC{$\vdash \lambda x : \BOOL.~x : \BOOL \to \BOOL$}
+		\AxiomC{}
+		\RightLabel{\textsc{T-True}}
+		\UnaryInfC{$\vdash \TRUE : \BOOL$}
+		\RightLabel{\textsc{T-App}}
+		\BinaryInfC{$\vdash (\lambda x : \BOOL.~x)~\TRUE : \BOOL$}
+	\end{prooftree}
+\end{frame}
+
+\begin{frame}
+	\frametitle{純粋な単純型付きラムダ計算の意味論}
+	\tiny
+	\begin{columns}
+		\begin{column}{.5\textwidth}
+			文法
+			\[
+				\begin{array}{rl@{\qquad\qquad}r}
+					t ::=
+					& & \mbox{項:} \\
+					& x & \mbox{変数} \\
+					& \lambda x : T. t & \mbox{$\lambda$抽象} \\
+					& t~t & \mbox{関数適用} \\
+				\end{array}
+			\]
+			\[
+				\begin{array}{rl@{\qquad\qquad}r}
+					v ::=
+					& & \mbox{値:} \\
+					& \lambda x : T.~t & \mbox{関数値} \\
+				\end{array}
+			\]
+			\[
+				\begin{array}{rl@{\qquad\qquad}r}
+					T ::=
+					& & \mbox{型:} \\
+					& T \to T & \mbox{関数型} \\
+				\end{array}
+			\]
+			\[
+				\begin{array}{rl@{\qquad\qquad}r}
+					\Gamma ::=
+					& & \mbox{型環境:} \\
+					& \emptyset & \mbox{空の環境} \\
+					& \Gamma, x : T & \mbox{項変数の束縛} \\
+				\end{array}
+			\]
+		\end{column}
+		\begin{column}{.5\textwidth}
+			評価規則($t \longrightarrow t'$)
+			\begin{prooftree}
+				\AxiomC{$t_1 \longrightarrow t_1'$}
+				\RightLabel{\textsc{E-App1}}
+				\UnaryInfC{$t_1~t_2 \longrightarrow t_1'~t_2$}
+			\end{prooftree}
+			\begin{prooftree}
+				\AxiomC{$t_2 \longrightarrow t_2'$}
+				\RightLabel{\textsc{E-App2}}
+				\UnaryInfC{$v_1~t_2 \longrightarrow v_1~t_2'$}
+			\end{prooftree}
+			\[
+				(\lambda x : T_{11}.~t_{12})~v_2 \longrightarrow [x \mapsto v_2]t_{12}~(\textsc{E-AppAbs})
+			\]
+			型付け規則($\Gamma \vdash t : T$)
+			\begin{prooftree}
+				\AxiomC{$x : T \in \Gamma$}
+				\RightLabel{\textsc{T-Var}}
+				\UnaryInfC{$\Gamma \vdash x : T$}
+			\end{prooftree}
+			\begin{prooftree}
+				\AxiomC{$x : T_1 \vdash t : T_2$}
+				\RightLabel{\textsc{T-Abs}}
+				\UnaryInfC{$\vdash \lambda x.~t : T_1 \to T_2$}
+			\end{prooftree}
+			\begin{prooftree}
+				\AxiomC{$\Gamma \vdash t_1 : T_{11} \to T_{12}$}
+				\AxiomC{$\Gamma \vdash t_2 : T_{11}$}
+				\RightLabel{\textsc{T-App}}
+				\BinaryInfC{$\Gamma \vdash t_1~t_2 : T_{12}$}
+			\end{prooftree}
+		\end{column}
+	\end{columns}
+\end{frame}
+
+\section{型付けの性質}
+
+\begin{frame}
+  \frametitle{型付け関係の反転}
+  \renewcommand{\thelemma}{9.3.1}
+  \begin{lemma}[型付け関係の反転]
+		\begin{enumerate}
+			\item $\Gamma \vdash x : R$ならば$x:R \in \Gamma$
+			\item $\Gamma \vdash \lambda x:T_1.~t_2 : R$ならば$\Gamma,x:T_1 \vdash t_2:R_2$及び$R=T_1 \to R_2$を満たすある型$R_2$が存在する
+			\item $\Gamma \vdash t_1~t_2$ならば$\Gamma \vdash t_1 : T_{11}\to R$及び$\Gamma \vdash t_2:T_{11}$を満たすある型$T_{11}$が存在する
+			\item $\Gamma \vdash \TRUE : R$ならば$R=\BOOL$が成り立つ
+			\item $\Gamma \vdash \FALSE : R$ならば$R=\BOOL$が成り立つ
+			\item $\Gamma \vdash \IF~t_1~\THEN~t_2~\ELSE~t_3 : R$ならば$\Gamma \vdash t_1 : \BOOL$, $\Gamma \vdash t_2 : R$及び$\Gamma \vdash t_3 : R$が成り立つ
+		\end{enumerate}
+  \end{lemma}
+	8章同様, 定義から直ちに証明できる.
+\end{frame}
+
+\begin{frame}
+  \frametitle{型の一意性}
+  \renewcommand{\thelemma}{9.3.3}
+  \begin{lemma}[型の一意性]
+		与えられた型環境$\Gamma$の下で項$t$の型$T$は一意に定まる(ただし, t上の全ての自由変数は$\Gamma$に現れるものとする) \\
+		さらに, 型付け関係が推論規則から生成できるならばその導出も一意である
+  \end{lemma}
+  \begin{proof}[証明]
+		前者を述語論理で書き下すと$\forall \Gamma~t~T_1~T_2.~\Gamma \vdash t:T_1 \wedge \Gamma \vdash t : T_2 \Rightarrow T_1 = T_2$ \\
+		$\Gamma \vdash t : T_1$の導出に関する構造的帰納法を用いる. \\
+		$\Gamma \vdash t : T_2$に由来する仮定に対して型付け関係の反転補題を適用して帰納法の仮定を使えば良い. \\
+		このとき, $\Gamma \vdash t : T_1$の場合分けに用いた型付け規則と$\Gamma \vdash t : T_2$に適用した反転補題に対応する型付け規則が一致するため, 後者が成り立つ事が示せる.\\
+		\textsc{T-Var}のときは$\Gamma$に束縛された変数$x$が一回しか出現しない事を用いる.
+  \end{proof}
+\end{frame}
+
+\begin{frame}
+  \frametitle{標準形}
+  \renewcommand{\thelemma}{9.3.4}
+  \begin{lemma}[標準形]
+		\begin{enumerate}
+			\item $v$が$\BOOL$型を持つ値ならば$v$は$\TRUE$または$\FALSE$である
+			\item $v$が$T_1 \to T_2$型を持つ値ならば$v=\lambda x:T_1.~t_2$と表わされる
+		\end{enumerate}
+  \end{lemma}
+  \begin{proof}[証明]
+		$v$の構造について場合分けをすると, 結論の形をとらない値は前提の型付け関係が成り立たない事から証明できる.
+  \end{proof}
+\end{frame}
+
+\begin{frame}
+  \frametitle{進行定理}
+  \renewcommand{\thetheorem}{9.3.5}
+  \begin{theorem}[進行定理]
+		$t$が閉じたwell-typedな項($\vdash t:T$となる型$T$が存在する)ならば$t$は値もしくは$t \longrightarrow t'$となる項$t'$が存在する
+  \end{theorem}
+  \begin{proof}[証明]
+		型付け関係の導出に関する構造的帰納法で証明する.\\
+		\textsc{T-Var}の場合: 変数は閉じた項になり得ないため前提が偽.\\
+		\textsc{T-Abs}の場合: $\lambda$抽象は値であるので直ちに成り立つ.\\
+		\textsc{T-App}の場合: $t=t_1~t_2$\\ 
+		帰納法の仮定により$t_1$は値もしくは$t_1 \longrightarrow t_1'$となる項$t_1'$が存在する. $t_2$に対しても同様の命題が成り立つ.\\
+		$t_1$が簡約できる場合, \textsc{E-App1}を適用すればよい.\\
+		$t_1$が値で$t_2$が簡約できる場合, \textsc{E-App2}を適用する.\\
+		$t_1$と$t_2$が共に値の場合, 標準形の補題により$t_1$が$\lambda x:T_{11}.~t_{12}$の形を取る事が分かり, \textsc{E-AppAbs}を適用する事ができる.
+  \end{proof}
+\end{frame}
+
+\begin{frame}
+  \frametitle{並び替え}
+  \renewcommand{\thelemma}{9.3.6}
+  \begin{lemma}[並び替え]
+		$\Gamma \vdash t : T$かつ$\Delta$が$\Gamma$の並び替えならば$\Delta \vdash t : T$ \\
+		加えて, 導出の深さはそれぞれ等しい
+  \end{lemma}
+  \begin{proof}[証明]
+		型付け関係の導出に関する構造的帰納法で証明する.\\
+		\textsc{T-Var}の場合: 型環境に出現する変数は重複しないと仮定したので成り立つ\\
+		\textsc{T-Abs}の場合: $t=t_1~t_2$\\
+		仮定より$\Delta$は$\Gamma$の並び替えであり, 帰納法の仮定より全ての$\Delta'$に対して$\Delta'$が$\Gamma,x:T_{11}$の並び替えならば$\Delta ' \vdash t_2:T_{11} \to T_{12}$.\\
+		$\Delta$は$\Gamma$の並び替えであるから, $\Delta, x:T_{11}$は$\Gamma, x:T_{11}$の並び替えである.
+		従って, 帰納法の仮定から$\Delta,x:T_{11} \vdash t_2:T_{12}$が得られるので, \textsc{T-Abs}を適用すれば良い.\\
+		それ以外の場合: 自明\\
+		このとき, 帰納法の各々の場合で用いた型付け規則はちょうど1回であるから後者も成り立つ.
+  \end{proof}
+\end{frame}
+
+\begin{frame}
+  \frametitle{弱化}
+  \renewcommand{\thelemma}{9.3.7}
+  \begin{lemma}[弱化]
+		$\Gamma \vdash t : T$かつ$x\notin \texttt{dom}(\Gamma)$ならば$\Gamma, x:S\vdash t : T$
+		加えて, 両者の導出の深さは等しい
+  \end{lemma}
+  \begin{proof}[証明]
+		型付け関係の導出に関する構造的帰納法で証明する.\\
+		\textsc{T-Var}の場合: 並び替え同様の議論で成り立つ.\\
+		\textsc{T-Abs}の場合: $t=\lambda x':T_1.~t$\\
+		帰納法の仮定を適用できるように, 適切に$\alpha$変換して$x\neq x'$を満たす必要がある.\\
+		並び替えの補題を用い, \textsc{T-Abs}を適用する.\\
+		その他の規則: 自明
+  \end{proof}
+\end{frame}
+
+\begin{frame}
+  \frametitle{代入の元での型保存補題}
+  \renewcommand{\thelemma}{9.3.8}
+  \begin{lemma}[代入の元での型保存]
+		$\Gamma, x:S \vdash t : T$かつ$\Gamma \vdash s:S$ならば$\Gamma \vdash [x \mapsto s]t : T$
+  \end{lemma}
+  \begin{proof}[証明]
+		$\Gamma, x:S \vdash t : T$の導出に関する構造的帰納法で証明する.\\
+		\textsc{T-Var}の場合: $t=z$ ただし, $z:T\in (\Gamma, x:S)$\\
+		z=xが成り立つ場合と成り立たない場合に場合分けする.\\
+		z=xが成り立つ場合, $[x \mapsto s]z = s$となるから自明.\\
+		z=xが成り立たない場合, $[x \mapsto s]z = z$となるため, 弱化規則を用いて示せる.\\
+		\textsc{T-Abs}の場合: $t=\lambda y:T_2.t_1\qquad T=T_2 \to T_1\qquad \Gamma, x:S, y:T_2 \vdash t_1:T_1$\\
+		弱化と並び替えにより$\Gamma, y:T_2 \vdash s : S$が得られる.\\
+		あとは帰納法の仮定と\textsc{T-Abs}を適用すれば良い.\\
+		残りの場合: 自明
+  \end{proof}
+\end{frame}
+
+\begin{frame}
+  \frametitle{型保存定理}
+  \renewcommand{\thetheorem}{9.3.9}
+  \begin{theorem}[型保存定理]
+		$\Gamma \vdash t : T$かつ$t\longrightarrow t'$ならば$\Gamma \vdash t' : T$
+  \end{theorem}
+  \begin{proof}[証明]
+		練習問題
+  \end{proof}
+\end{frame}
+
+\section{カリーハワード対応}
+
+\begin{frame}
+  \frametitle{カリーハワード対応}
+	\Large 型理論と論理学の間に成り立つ対応関係
+	\begin{table}[htb]
+		\begin{tabular}{l l}
+			論理学 & プログラミング言語 \\
+			\hline
+			命題$P\Rightarrow Q$ & 型$P\to Q$ \\
+			命題$P \land Q$ & 型$P \times Q$ \\
+			命題$P$の証明 & 型$P$を持つ項$t$ \\
+			命題$P$は証明できる & 型$P$を持つ項が存在する\\
+			二階の構成的論理 & $\texttt{System F}$ \\
+			高階論理 & $\texttt{System F}_\omega$ \\
+			線形論理 & 線形型システム \\
+			様相論理 & 部分評価, 実行時コード生成
+		\end{tabular}
+	\end{table}
+\end{frame}
+
+\section{型消去と型付け可能性}
+
+\begin{frame}
+  \frametitle{型消去}
+	\Large 型注釈は評価において用いられていないため, 型付きの項を型無しの項に写して意味論を定義する事もできる
+  \renewcommand{\thedefinition}{9.5.1}
+	\begin{definition}[単純型付き項に対する型消去]
+		\[
+			\begin{array}{lcl}
+				\textit{erase}(x) & = & x \\
+				\textit{erase}(\lambda x : T_1.~t_2) & = & \lambda x.~\textit{erase}(t_2) \\
+				\textit{erase}(t_1 t_2) & = & \textit{erase}(t_1)~\textit{erase}(t_2)
+			\end{array}
+		\]
+	\end{definition}
+\end{frame}
+
+\begin{frame}
+  \frametitle{型消去の性質}
+  \renewcommand{\thetheorem}{9.5.2}
+	\begin{theorem}[]
+		\begin{enumerate}
+			\item $t\longrightarrow t'$ならば$\textit{erase}(t)\longrightarrow \textit{erase}(t')$
+			\item $\textit{erase}(t)\longrightarrow m'$ならばある型付きの項$t'$が存在し$t\longrightarrow t'$かつ$\textit{erase}(t')=m'$
+		\end{enumerate}
+	\end{theorem}
+	\begin{proof}[証明]
+		型付け関係の導出に関する帰納法で証明できる
+	\end{proof}
+	\renewcommand{\thedefinition}{9.5.3}
+	\begin{definition}[]
+		ある型無しの項mについて型付きの項$t$, 型$T$, 型環境$\Gamma$が存在し$\textit{erase}(t)=m$かつ$\Gamma \vdash t : T$が成り立つとき, mは$\lambda_\to$で型付け可能であると言う
+	\end{definition}
+\end{frame}
+
+\section{CurryスタイルとChurchスタイル}
+
+\begin{frame}
+  \frametitle{CurryスタイルとChurchスタイル}
+  \begin{itemize}\Large 
+		\item Curryスタイル\\
+			項と意味論を定義し, 望まない振る舞いをする項を弾く型システムを定義
+		\item Churchスタイル\\
+			項と型システムを定義し, 正しく型付けされた項に対して意味論を与える
+	\end{itemize}
+\end{frame}
+
+\end{document}
