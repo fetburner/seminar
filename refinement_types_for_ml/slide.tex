@@ -1,0 +1,382 @@
+\documentclass[dvipdfmx,cjk,xcolor=dvipsnames,envcountsect,notheorems,aspectratio=169]{beamer}
+
+\usepackage{amsmath,amssymb,amsfonts,amsthm,ascmac,cases,bm,pifont}
+\usepackage{pxjahyper}
+\usepackage{graphicx}
+\usepackage{url}
+\usepackage{bussproofs}
+
+\usetheme{sumiilab}
+
+\title{The Original Refinement Types}
+\subtitle{"Refinement Types for ML"}
+\author{水野 雅之}
+\date{2015年5月20日}
+
+\AtBeginSection[]{
+\begin{frame}
+	\frametitle{Outline}
+  \tableofcontents[sectionstyle=show/shaded,subsectionstyle=show/show/hide]
+\end{frame}}
+
+\setbeamertemplate{theorems}[numbered]
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+\newtheorem{axiom}{Axiom}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{corollary}{Corollary}
+\newtheorem{proposition}{Proposition}
+
+\usepackage{listings,jlisting}
+\lstset{
+  language={[Objective]Caml},
+  basicstyle={\ttfamily\small},
+  keywordstyle={\bfseries},
+  commentstyle={},
+  stringstyle={},
+  frame=trlb,
+  numbers=none,
+  numberstyle={},
+  xleftmargin=5pt,
+  xrightmargin=5pt,
+  keepspaces=true,
+  moredelim=[is][\itshape]{@/}{/@},
+  moredelim=[is][\color{red}]{@r\{}{\}@},
+  moredelim=[is][\color{blue}]{@b\{}{\}@},
+  moredelim=[is][\color{DarkGreen}]{@g\{}{\}@},
+}
+
+\newcommand{\BOOL}{\texttt{Bool}}
+\newcommand{\TRUE}{\texttt{true}}
+\newcommand{\FALSE}{\texttt{false}}
+\newcommand{\IF}{\texttt{if}}
+\newcommand{\THEN}{\texttt{then}}
+\newcommand{\ELSE}{\texttt{else}}
+\newcommand{\CONS}{\texttt{cons}}
+\newcommand{\NIL}{\texttt{nil}}
+\newcommand{\SINGLETON}{\texttt{singleton}}
+\newcommand{\LIST}{\texttt{list}}
+\newcommand{\RECTYPE}{\texttt{rectype}}
+\newcommand{\AND}{\texttt{and}}
+
+\begin{document}
+\frame[plain]{\titlepage}
+
+\section*{Outline}
+
+\begin{frame}
+  \frametitle{Outline}
+  \tableofcontents[sectionstyle=show,subsectionstyle=hide]
+\end{frame}
+
+\section{Motivation}
+
+\begin{frame}
+  \frametitle{Motivation}
+	\Large Nowadays refinement types are popular
+	\[\Lambda \pi:\tau.~e\qquad\{x : T~|~P(x)\}\]
+	\begin{itemize}
+		\item Isn't it dependent types?
+		\item Too many extensions to see through the essence
+	\end{itemize}
+	\vfill
+	Try to read original paper ("Refinement Types for ML")
+\end{frame}
+
+\section{Introduction}
+
+\begin{frame}
+	\frametitle{Refinement Types?}
+	\Large "We describe a refinement of ML's type system
+	allowing the specification of recursively defined subtypes of user-defined datatypes."
+	\begin{itemize}
+		\item Preserve desirable properties of ML's type system
+			\begin{itemize}
+				\item Decidability of type inference
+				\item Every well-typed expression has a principal type
+			\end{itemize}
+		\item Allow more errors to be detected at compile-time
+	\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+	\frametitle{Opportunity to Improve}
+\begin{lstlisting}
+datatype 'a list = nil | cons of 'a * 'a list
+fun lastcons (last as cons(hd,nil)) = last
+  | lastcons (cons(hd, tl)) = lastcons tl
+\end{lstlisting}
+	\begin{itemize}
+		\item undefined when called on nil
+	\end{itemize}
+\begin{lstlisting}
+case lastcons y of
+     cons(x,nil) => print x
+\end{lstlisting}
+	\begin{itemize}
+		\item ML type system does not distinguish singleton lists
+		\item Get compiler warning
+	\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+	\frametitle{Solution}
+\begin{lstlisting}
+datatype 'a list = nil | cons of 'a * 'a list
+rectype 'a singleton = cons('a, nil)
+\end{lstlisting}
+	\[
+		\begin{array}{rlclc}
+			\CONS : &(\alpha * \alpha~?\NIL) & \to & \alpha~\SINGLETON & \land \\
+							&(\alpha * \alpha~\SINGLETON) & \to & \alpha~\LIST & \land \\
+							&(\alpha * \alpha~\LIST) & \to & \alpha~\LIST &
+		\end{array}
+	\]
+	\begin{itemize}
+		\item \tt{rectype} declaration stand for subtypes
+		\item $\alpha~\SINGLETON=\{\CONS(\alpha, \NIL)~|~a\in \alpha\}\subset \alpha~\LIST$
+		\item Abstract interpretation over lattice (p. 2)
+		\item Intersection type (only refinement types)
+	\end{itemize}
+\end{frame}
+
+\begin{frame}
+	\frametitle{Expressivity}
+	\Large There are examples which cannot be specified as refinement types
+	\begin{itemize}
+		\item List without repeated elements
+		\item Closed term in $\lambda$-calculus
+	\end{itemize}
+	\tt{rectype} specify so-called regular tree sets
+\end{frame}
+
+\section{The Language}
+
+\begin{frame}
+	\frametitle{Rectype Declarations}
+	\[
+		\begin{array}{lcl}
+			\textit{rectype} & ::= & \RECTYPE~\textit{rectypedecl} \\
+			\textit{rectypedecl} & ::= & <\textit{\textit{mlty}pevar}>~\textit{reftyname} = \textit{recursivety}~<\AND~\textit{rectypedecl}> \\
+			\textit{recursivety} & ::= & \textit{recursivety}~|~\textit{recursivety} \\
+									& & \textit{mlty} \to \textit{recursivety} \\
+									& & \textit{constructor}~\textit{recursivetyseq} \\
+									& & \textit{mltypevar} \\
+									& & <\textit{mltypevar}>~\textit{reftyname}
+		\end{array}
+	\]
+	\Large Each rectype declaration must be consistent with the ML datatype
+	\begin{itemize}
+		\item e.g. $\RECTYPE~\alpha~\texttt{bad} = \NIL (\NIL)$
+	\end{itemize}
+	Recursive type's definition must have the same type variable argument
+\end{frame}
+
+\begin{frame}
+	\frametitle{Refinement Types}
+	\[
+		\begin{array}{lcl}
+			\textit{refty} & ::= & \textit{refty} \land \textit{refty} \\
+						& & \textit{refty} \lor \textit{refty} \\
+						& & \textit{refty} \to \textit{refty} \\
+						& & \bot \\
+						& & <\textit{refty}> \textit{mltyname} \\
+						& & <\textit{refty}> \textit{reftyname} \\
+						& & <\textit{refty}> \textit{reftyname} \\
+						& & \textit{reftyvar} :: \textit{mltyvar}
+		\end{array}
+	\]
+	\Large Refinement type variable is bounded by an ML type variable \\
+	Ranges only over the refinements of an ML type
+\end{frame}
+
+\begin{frame}[fragile]
+	\frametitle{An Example}
+	Representation of natural numbers in binary
+\begin{lstlisting}
+datatype bitstr =
+   e | z of bitstr | o of bitstr
+\end{lstlisting}
+	We would like to guarantee that zero does not appear in MSB (standard form, \tt{std})
+\begin{lstlisting}
+rectype std = e | stdpos
+and stdpos = o(e) | z(stdpos) | o(stdpos)
+\end{lstlisting}
+\begin{lstlisting}
+fun add e m = m
+  | add n e = n
+  | add (z n) (z m) = z (add n m)
+  | add (o n) (z m) = o (add n m)
+  | add (z n) (o m) = o (add n m)
+  | add (o n) (o m) = z (add (add (o e) n) m)
+\end{lstlisting}
+	Infered type (See p. 4)
+\end{frame}
+
+\section{From Rectype Declarations to Datatype Lattices}
+
+\begin{frame}[fragile]
+	\frametitle{From Rectype Declarations to Datatype Lattices}
+\begin{lstlisting}
+datatype bitstr =
+    e | z of bitstr | o of bitstr
+rectype std = e | stdpos
+and stdpos = o(e) | z(stdpos) | o(stdpos)
+\end{lstlisting}
+	{\Large Manipulating regular tree grammers, we can infer:}
+	\begin{itemize}
+		\item These refinement types are closed under intersection and union (See p. 5)
+		\item They form lattice
+	\end{itemize}
+	{\Large Types for the constructors are calculated as}
+	\frametitle{}
+	\[
+		\begin{array}{lcl}
+			\texttt{e} & : & ?\texttt{e} \\
+			\texttt{o} & : & ?\texttt{e} \to \texttt{stdpos} \land \texttt{stdpos} \to \texttt{stdpos} \\
+			\texttt{z} & : & \texttt{stdpos} \to \texttt{stdpos}
+		\end{array}
+	\]
+\end{frame}
+
+\section{From Datatype Lattice to Function Types}
+
+\begin{frame}
+	\frametitle{Normal Form}
+	{\Large After apply the following rewrite rules,}
+	\[
+		\begin{array}{lcl}
+			\rho \land (\sigma \lor \tau) & \Rightarrow & (\rho \land \sigma) \lor (\rho \land \tau) \\
+			(\rho \lor \sigma) \to \tau & \Rightarrow & (\rho \to \tau) \land (\sigma \to \tau)
+		\end{array}
+	\]
+	{\Large The refinement types will fit the grammar}
+	\[
+		\begin{array}{lcl}
+			\textit{unf} & ::= & \textit{inf} \\
+					& & \textit{unf} \lor \textit{unf} \\
+			\textit{inf} & ::= & <\textit{unf}>~\textit{reftyname} \\
+					& & \textit{inf} \land \textit{inf} \\
+					& & \textit{inf} \to \textit{unf} \\
+					& & \textit{reftyvar} :: \textit{mltyvar}
+		\end{array}
+	\]
+\end{frame}
+
+\begin{frame}
+	\frametitle{Subtyping Rule for Arrow}
+	{\Large "$\to$" is contracariant in its first argument and covariant in its second argument}
+	\begin{prooftree}
+		\AxiomC{$\tau_1 \leq \tau_2$}
+		\AxiomC{$\sigma_2 \leq \sigma_1$}
+		\RightLabel{\textsc{S-Arrow}}
+		\BinaryInfC{$\sigma_1 \to \tau_1 \leq \sigma_2 \to \tau_2$}
+	\end{prooftree}
+	{\Large Datatype constructor may also be covariant or contracariant in their arguments}
+	\begin{itemize}
+		\item $\texttt{stdpos}~\texttt{list} \leq \texttt{std}~\texttt{list}$
+	\end{itemize}
+\end{frame}
+
+\begin{frame}
+	\frametitle{Subtyping Rule for Union}
+	\begin{prooftree}
+		\AxiomC{If for each $\sigma_i$ there is a ${\sigma'}_j$ such that $\sigma_i \leq {\sigma'}_j$}
+		\RightLabel{\textsc{S-Union}}
+		\UnaryInfC{$\sigma_1 \lor \sigma_2 \lor \ldots \lor \sigma_n \leq {\sigma'}_1 \lor {\sigma'}_2 \leq \ldots \lor {\sigma'}_m$}
+	\end{prooftree}
+	{\Large $\sigma_i$, ${\sigma'}_j$ : inf refinement types}
+\end{frame}
+
+\begin{frame}
+	\frametitle{Refinement Type of Application}
+	{\Large Function has type $\sigma = (\rho_1\to\tau_1) \land (\rho_2\to\tau_2) \land \ldots \land (\rho_n\to\tau_n)$ \\
+	Argument has type $\rho$\\
+	Their application $\texttt{apptype}(\sigma, \rho$)}
+	\[\texttt{apptype}(\sigma, \rho)=\bigwedge_{\{i|\rho\leq\rho_i\}}\tau_i\]
+\end{frame}
+
+\section{Polymorphism}
+
+\begin{frame}
+	\frametitle{Polymorphism}
+	{\Large The domain of type variable is restricted to range over subtypes of given bound (bounded quantification)}
+	\[
+		\begin{array}{lcl}
+			\textit{reftyscheme} & ::= & \textit{inf} \\
+													 & & \forall \alpha .~\textit{reftyscheme} \\
+													 & & \forall r\alpha :: \alpha.~\textit{reftyscheme}
+		\end{array}
+	\]
+	{\Large Refinement type for identity function id:}
+	\[
+		\forall \alpha. \forall r\alpha :: \alpha.~r\alpha \to r\alpha
+	\]
+	{\Large Instantiate $\alpha$ to bitstr and instantiate the refinement type quantifier}
+	\[
+		\begin{array}{cccl}
+			\texttt{bitstr} & \to & \texttt{bitstr} & \land \\
+			\texttt{stdpos} & \to & \texttt{stdpos} & \land \\
+			\texttt{std} & \to & \texttt{std} & \land \\
+			?\texttt{e} & \to & ?\texttt{e} & \land \\
+			\bot & \to & \bot & 
+		\end{array}
+	\]
+\end{frame}
+
+\section{The Type Inference Algorithm}
+
+\begin{frame}
+	\frametitle{Target Language}
+	\[
+		\begin{array}{lcl}
+			\textit{exp} & ::= & \textit{variable} \\
+							& & \textit{exp}~\textit{exp} \\
+							& & \lambda~\textit{variable}.~\textit{exp} \\
+							& & \textit{exp} : \textit{refty} \\
+							& & \texttt{let}~\textit{variable} = \textit{exp}~\texttt{in}~\textit{exp} \\
+							& & \texttt{fix}~\textit{variable}. \textit{exp}
+		\end{array}
+	\]
+	{\Large
+		\begin{tabular}{ll}
+			Typing derivation & $\Gamma \vdash e : D :: L$ \\
+			Meaning of metavariables & See p. 7
+		\end{tabular}}
+\end{frame}
+
+\begin{frame}
+	\frametitle{The Type Inference Algorithm}
+	{\Large type inference by unification just like ML types \\
+	Typing rules : See Figure 2\\
+	Eliminate all of the refinement, corresponds to ML types}
+	\begin{theorem}[preservation]
+		For all valid type environments $\Gamma$ and expressions e, if e evaluates to v and $\Gamma \vdash e : D :: L$ then $\Gamma \vdash v : D' :: L$ for some $D' \leq D$.
+	\end{theorem}
+	\begin{proof}
+		By induction on the structure of the definition of the "evaluates to" relation
+	\end{proof}
+\end{frame}
+
+\begin{appendix}
+	\begin{frame}[fragile]
+		\frametitle{Manipulating Case Statement}
+		\Large Implicitly define a new constant \tt{CASE}\_\it{datatype}
+\begin{lstlisting}
+case E of
+    e => E1
+  | o(m) => E2
+  | z(m) => E3
+\end{lstlisting}
+\begin{lstlisting}
+CASE_bitstr E
+  (fn () => E1)
+  (fn (m) => E2)
+  (fn (m) => E3)
+\end{lstlisting}
+		Type for \tt{CASE\_bitstr}: See Figure 1
+	\end{frame}
+\end{appendix}
+
+\end{document}
