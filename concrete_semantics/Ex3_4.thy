@@ -1,4 +1,5 @@
 header "Arithmetic and Boolean Expressions"
+(* https://github.com/fetburner/seminar の concrete_semantics/Ex3_4.thy を参照 *)
 
 theory Ex3_4 imports Main begin
 
@@ -89,10 +90,6 @@ fun asimp :: "aexp \<Rightarrow> aexp" where
 "asimp (Plus a\<^sub>1 a\<^sub>2) = plus (asimp a\<^sub>1) (asimp a\<^sub>2)" |
 "asimp (Times a\<^sub>1 a\<^sub>2) = times (asimp a\<^sub>1) (asimp a\<^sub>2)"
 text_raw{*}%endsnip*}
-
-text{* Note that in @{const asimp_const} the optimized constructor was
-inlined. Making it a separate function @{const plus} improves modularity of
-the code and the proofs. *}
 
 value "asimp (Plus (Plus (N 0) (N 0)) (Plus (V ''x'') (N 0)))"
 
