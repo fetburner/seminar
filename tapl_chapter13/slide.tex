@@ -1,0 +1,624 @@
+\documentclass[dvipdfmx,cjk,xcolor=dvipsnames,envcountsect,notheorems]{beamer}
+
+\usepackage{amsmath,amssymb,amsfonts,amsthm,ascmac,cases,bm,pifont}
+\usepackage{pxjahyper}
+\usepackage{graphicx}
+\usepackage{bussproofs}
+
+\usetheme{sumiilab}
+
+\title{13章 参照}
+\author{水野 雅之}
+\date{2015年6月14日}
+
+\AtBeginSection[]{
+\begin{frame}
+	\frametitle{アウトライン}
+	\tableofcontents[sectionstyle=show/shaded,subsectionstyle=show/show/hide]
+\end{frame}}
+
+\setbeamertemplate{theorems}[numbered]
+\theoremstyle{definition}
+\newtheorem{definition}{定義}
+\newtheorem{axiom}{公理}
+\newtheorem{theorem}{定理}
+\newtheorem{lemma}{補題}
+\newtheorem{corollary}{系}
+\newtheorem{proposition}{命題}
+
+\usepackage{listings,jlisting}
+
+\definecolor{DarkGreen}{rgb}{0,0.5,0}
+% プログラミング言語と表示するフォント等の設定
+\lstset{
+  language={[Objective]Caml},% プログラミング言語
+  basicstyle={\ttfamily\small},% ソースコードのテキストのスタイル
+  keywordstyle={\bfseries},% 予約語等のキーワードのスタイル
+  commentstyle={},% コメントのスタイル
+  stringstyle={},% 文字列のスタイル
+  frame=trlb,% ソースコードの枠線の設定 (none だと非表示)
+  numbers=none,% 行番号の表示 (left だと左に表示)
+  numberstyle={},% 行番号のスタイル
+  xleftmargin=5pt,% 左余白
+  xrightmargin=5pt,% 右余白
+  keepspaces=true,% 空白を表示する
+  mathescape,% $ で囲った部分を数式として表示する ($ がソースコード中で使えなくなるので注意)
+  % 手動強調表示の設定
+  moredelim=[is][\itshape]{@/}{/@},
+  moredelim=[is][\color{red}]{@r\{}{\}@},
+  moredelim=[is][\color{blue}]{@b\{}{\}@},
+  moredelim=[is][\color{DarkGreen}]{@g\{}{\}@},
+}
+
+\newcommand{\BOOL}{\texttt{Bool}}
+\newcommand{\TRUE}{\texttt{true}}
+\newcommand{\FALSE}{\texttt{false}}
+\newcommand{\IF}{\texttt{if}}
+\newcommand{\THEN}{\texttt{then}}
+\newcommand{\ELSE}{\texttt{else}}
+\newcommand{\REF}{\texttt{ref}}
+\newcommand{\REFT}{\texttt{Ref}}
+\newcommand{\UNIT}{\texttt{unit}}
+\newcommand{\UNITT}{\texttt{Unit}}
+\newcommand{\NATT}{\texttt{Nat}}
+
+\begin{document}
+\frame[plain]{\titlepage}
+
+\section*{アウトライン}
+
+\begin{frame}
+	\frametitle{アウトライン}
+	\tableofcontents[sectionstyle=show,subsectionstyle=hide]
+\end{frame}
+
+\begin{frame}
+	\frametitle{動機}
+	\Large これまで純粋な言語機能について議論してきたが、実用的な言語に含まれるような純粋でない機能についても議論したい\\
+	\vfill
+	ここでは副作用（より一般的に計算的作用と言われる）の一種である書き換え可能な参照を扱う
+\end{frame}
+
+\section{導入}
+
+\begin{frame}
+	\frametitle{導入}
+	\Large ML系言語は変数束縛と参照は分けて扱う
+	\begin{itemize}
+		\item \lstinline|let x = 5 and y = ref 5|
+	\end{itemize}
+	C系の言語では{\small 特に指定しなければ}変数は書き換え可能なセルを持つ
+	\begin{itemize}
+		\item \lstinline|int x = 5; x = 84;|
+	\end{itemize}
+	\vfill
+	ここでは前者のアプローチを採用する
+\end{frame}
+
+\subsection{参照の基本}
+
+\begin{frame}[fragile]
+	\frametitle{参照の基本}
+	\Large 参照に対しての基本的な操作
+	\begin{itemize}
+		\item 書き換え可能なセルの確保 \lstinline|ref|
+		\item dereference（参照セルから値の取り出し） \lstinline|!|
+		\item 代入 \lstinline|:=|
+	\end{itemize}
+\begin{lstlisting}
+r = ref 5;
+- r : Ref Nat
+!r;
+- 5 : Nat
+r := 7;
+- unit : Unit
+!r;
+- 7 : Nat
+\end{lstlisting}
+	だいたいMLと同じ挙動
+\end{frame}
+
+\subsection{副作用と逐次実行}
+
+\begin{frame}[fragile]
+	\frametitle{副作用と逐次実行}
+	\Large 代入がunitに評価されることは逐次実行と相性がよい
+\begin{lstlisting}
+(r := succ (!r); !r);
+- 8 : Nat
+\end{lstlisting}
+	一つ目の式がUnit型であることを要請したおかげでデバッグで幸せになれる\\
+	二つ目の式も代入の場合全体の型はUnitとなるため、逐次実行の列を作ることもできる
+\begin{lstlisting}
+(r:=succ(!r);r:=succ(!r);r:=succ(!r);r:=succ(!r);!r);
+- 13 : Nat
+\end{lstlisting}
+\end{frame}
+
+\subsection{参照とエイリアス}
+
+\begin{frame}[fragile]
+	\frametitle{参照とエイリアス}
+	\Large rに束縛された参照とその参照が指すセルの違いに注意\\
+	rをコピーしても、中身まではコピーされない
+\begin{lstlisting}
+s = r;
+- s : Ref Nat
+\end{lstlisting}
+	従って、sに代入するとrも書きかわる
+\begin{lstlisting}
+s := 82;
+- unit : Unit
+!r;
+- 82 : Nat
+\end{lstlisting}
+	{\small p.155とp.156の図も参照}\\
+	このとき、sとrは同じセルのエイリアスという
+\end{frame}
+
+\subsection{共有状態}
+
+\begin{frame}[fragile]
+	\frametitle{共有状態}
+	\Large エイリアスがあるとプログラムの性質が証明しづらい
+	\begin{itemize}
+		\item \lstinline|(r:=1;r:=!s)|と\lstinline|r:=!s|は同じように振る舞うか？
+	\end{itemize}
+	とはいえ便利で、プログラムの異なる部分に「暗黙の通信チャンネル」を作れたりする\\
+	例えばこういう風に参照セルと関数を作ると
+\begin{lstlisting}
+c = ref 0;
+- c : Ref Nat
+incc = \x:Unit. (c := succ (!c); !c);
+- incc : Unit -> Nat
+decc = \x:Unit. (c := pred (!c); !c);
+- decc : Unit -> Nat
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+	\frametitle{共有状態}
+	\Large
+\begin{lstlisting}
+incc unit;
+- 1 : Nat
+decc unit;
+- 0 : Nat
+\end{lstlisting}
+	inccを呼び出すとcを変更でき、deccを呼び出すとそれが分かる\\
+	inccとdeccをレコードにまとめると他の所に渡しやすい
+\begin{lstlisting}
+o = {i = incc, d = decc};
+- o : {i : Unit -> Nat, d : Unit -> Nat}
+\end{lstlisting}
+	これは18章で詳しく見るオブジェクトを作ったともいえる
+\end{frame}
+
+\subsection{複合的な型の参照}
+
+\begin{frame}[fragile]
+	\frametitle{複合的な型の参照}
+	\Large 参照が取り扱えるのは数値に限らない\\
+	例えば関数への参照を使うと、配列を実装できる
+\begin{lstlisting}
+NatArray = Ref (Nat -> Nat);
+newarray = \_ : Unit. ref (\n : Nat. 0);
+- newarray : Unit -> NatArray
+lookup = \a : NatArray. \n : Nat. (!a) n;
+- lookup : NatArray -> Nat -> Nat
+update = \a : NatArray. \m : Nat. \v : Nat.
+           let oldf = !a in
+           a := (\n : Nat. if equal m n then v
+                           else oldf n);
+- update : NatArray -> Nat -> Nat -> Unit
+\end{lstlisting}
+\end{frame}
+
+\subsection{ガベージコレクション}
+
+\begin{frame}
+	\frametitle{ガベージコレクション}
+	\Large 必要が無くなったセルを解放するプリミティブがないが、
+	現代的な言語ではGCにより解決している\\
+	設計者の趣味ではなく、明示的な解放操作があると型安全の達成が非常に難しいため
+	\vfill
+	\structure{ぶら下がり参照問題}
+	\begin{itemize}
+		\item 数値を保持した参照セルを明示的に解放
+		\item 真偽値を保持した参照セルを確保
+		\item 同じ位置のメモリが使用されるとどうなるか?
+	\end{itemize}
+\end{frame}
+
+\section{型付け}
+
+\begin{frame}
+	\frametitle{型付け}
+	\Large \lstinline|ref|、\lstinline|:=|と\lstinline|!|の型付けは自明
+	\begin{prooftree}
+		\AxiomC{$\Gamma \vdash t_1 : T_1$}
+		\RightLabel{\textsc{T-Ref}}
+		\UnaryInfC{$\Gamma \vdash \REF~t_1 : \REFT~T_1$}
+	\end{prooftree}
+	\begin{prooftree}
+		\AxiomC{$\Gamma \vdash t_1 : \REF~T_1$}
+		\RightLabel{\textsc{T-Deref}}
+		\UnaryInfC{$\Gamma \vdash~!t_1 : T_1$}
+	\end{prooftree}
+	\begin{prooftree}
+		\AxiomC{$\Gamma \vdash t_1 : \REF~T_1$}
+		\AxiomC{$\Gamma \vdash t_2 : T_1$}
+		\RightLabel{\textsc{T-Assign}}
+		\BinaryInfC{$\Gamma \vdash t_1 := t_2 : \UNITT$}
+	\end{prooftree}
+\end{frame}
+
+\section{評価}
+
+\begin{frame}
+	\frametitle{評価関係の拡張}
+	\Large ストア$\mu$はポインタを表すロケーション$l$を、値に写す部分関数として表す\\
+	項の値はストアに依存し、評価の前後でストアは変化しうるため、評価関係を拡張する
+	\[t | \mu \rightarrow t' | \mu '\]
+	既存の規則はごく自然に拡張できる
+	\[(\lambda x : T_{11}.t_{12})~v_2|\mu \rightarrow [x\mapsto v_2]t_{12}|\mu~\textsc{E-AppAbs}\]
+	\begin{prooftree}
+		\AxiomC{$t_1|\mu\rightarrow t_1' | \mu '$}
+		\RightLabel{\textsc{E-App1}}
+		\UnaryInfC{$t_1~t_2|\mu\rightarrow t_1'~t_2| \mu '$}
+	\end{prooftree}
+	\begin{prooftree}
+		\AxiomC{$t_1|\mu\rightarrow t_1' | \mu '$}
+		\RightLabel{\textsc{E-App2}}
+		\UnaryInfC{$t_1~t_2|\mu\rightarrow t_1'~t_2| \mu '$}
+	\end{prooftree}
+\end{frame}
+
+\begin{frame}
+	\frametitle{値}
+	\Large $\REF~t$の値は新しく確保したセルのロケーションなので、ロケーションも値とする\\
+	\[
+		\begin{array}{rl@{\qquad\qquad}r}
+			v ::=
+			& & \mbox{値:} \\
+			& \lambda x : T.~t & \mbox{関数抽象} \\
+			& \UNIT & \mbox{unit} \\
+			& l & \mbox{ロケーション} \\
+		\end{array}
+	\]
+\end{frame}
+
+\begin{frame}
+	\frametitle{項}
+	\Large small-step semanticsを採用するため、計算の途中結果も項
+	\[
+		\begin{array}{rl@{\qquad\qquad}r}
+			t ::=
+			& & \mbox{項:} \\
+			& x & \mbox{変数} \\
+			& \lambda x : T.~t & \mbox{関数抽象} \\
+			& t~t & \mbox{関数適用} \\
+			& \UNIT & \mbox{unit} \\
+			& \REF~t & \mbox{参照セルの作成} \\
+			& !t & \mbox{値の取り出し} \\
+			& t := t & \mbox{代入} \\
+			& l & \mbox{ロケーション} \\
+		\end{array}
+	\]
+\end{frame}
+
+\begin{frame}
+	\frametitle{dereferenceの評価}
+	\Large 項がロケーションになるまで評価する
+	\begin{prooftree}
+		\AxiomC{$t_1 | \mu \rightarrow t_1' | \mu'$}
+		\RightLabel{\textsc{E-Deref}}
+		\UnaryInfC{$!t_1 | \mu \rightarrow !t_1' | \mu'$}
+	\end{prooftree}
+	dereferenceの結果はロケーションが指す位置のストアの値
+	\begin{prooftree}
+		\AxiomC{$\mu(l) = v$}
+		\RightLabel{\textsc{E-DerefLoc}}
+		\UnaryInfC{$!l|\mu \rightarrow v | \mu$}
+	\end{prooftree}
+\end{frame}
+
+\begin{frame}
+	\frametitle{代入の評価}
+	\Large 代入先がロケーションになるまで評価する
+	\begin{prooftree}
+		\AxiomC{$t_1 | \mu \rightarrow t_1' | \mu'$}
+		\RightLabel{\textsc{E-Assign1}}
+		\UnaryInfC{$t_1 := t_2 | \mu \rightarrow t_1' := t_2 | \mu'$}
+	\end{prooftree}
+	代入する値を求める
+	\begin{prooftree}
+		\AxiomC{$t_2 | \mu \rightarrow t_2' | \mu'$}
+		\RightLabel{\textsc{E-Assign2}}
+		\UnaryInfC{$v_1 := t_2 | \mu \rightarrow v_1 := t_2' | \mu'$}
+	\end{prooftree}
+	ロケーションが指すセルの値を書き換える
+	\[l:=v_2|\mu \rightarrow \UNIT|[l\mapsto v_2]\mu~\textsc{E-Assign}\]
+\end{frame}
+
+\begin{frame}
+	\frametitle{refの評価}
+	\Large 初期値が値になるまで評価する
+	\begin{prooftree}
+		\AxiomC{$t_1 | \mu \rightarrow t_1' | \mu'$}
+		\RightLabel{\textsc{E-Ref}}
+		\UnaryInfC{$\REF~t_1 | \mu \rightarrow \REF~t_1' | \mu'$}
+	\end{prooftree}
+	refはfreshなロケーションを返す必要がある
+	\begin{prooftree}
+		\AxiomC{$l \notin \texttt{dom} (\mu)$}
+		\RightLabel{\textsc{E-RefV}}
+		\UnaryInfC{$\REF~v_1 | \mu \rightarrow l | (\mu, l \mapsto v_1)$}
+	\end{prooftree}
+	GCは形式的には違いが無いので扱いません
+\end{frame}
+
+\section{ストア型付け}
+
+\begin{frame}
+	\frametitle{ロケーションの型付け}
+	\Large ロケーションの型は？\\
+	ストアを見ないと分からない
+	\begin{prooftree}
+		\AxiomC{$\Gamma \vdash \mu (l) : T_1$}
+		\RightLabel{}
+		\UnaryInfC{$\Gamma \vdash l : \REFT~T_1$}
+	\end{prooftree}
+	項の型はストアにも依存するので、型付け関係を拡張
+	\begin{prooftree}
+		\AxiomC{$\Gamma | \mu \vdash \mu (l) : T_1$}
+		\RightLabel{}
+		\UnaryInfC{$\Gamma | \mu \vdash l : \REFT~T_1$}
+	\end{prooftree}
+	しかし、この型付け規則にはいくつか問題がある
+\end{frame}
+
+\begin{frame}
+	\frametitle{問題点}
+	\Large いちいち$\mu(l)$の型を求めるので非効率
+	\[
+		\begin{array}{rl}
+			(l_1 & \mapsto \lambda x : \NATT.~999,\\
+			l_2 & \mapsto \lambda x : \NATT.~(!l_1)~x,\\
+			l_3 & \mapsto \lambda x : \NATT.~(!l_2)~x,\\
+			l_4 & \mapsto \lambda x : \NATT.~(!l_3)~x,\\
+			l_5 & \mapsto \lambda x : \NATT.~(!l_4)~x)\\
+		\end{array}
+	\]
+	循環した構造に型を付けられない
+	\[
+		\begin{array}{rl}
+			(l_1 & \mapsto \lambda x : \NATT.~(!l_2)~x,\\
+			l_2 & \mapsto \lambda x : \NATT.~(!l_1)~x),\\
+		\end{array}
+	\]
+\end{frame}
+
+\begin{frame}
+	\frametitle{ストア型付け}
+	\Large ロケーションの型はrefで作られた時に決まっている\\
+	ロケーションの型の情報を集める\structure{ストア型付け}$\mu$を導入
+	\begin{prooftree}
+		\AxiomC{$\Sigma(l)=T_1$}
+		\RightLabel{\textsc{T-Loc}}
+		\UnaryInfC{$\Gamma | \Sigma \vdash l : \REFT~T_1$}
+	\end{prooftree}
+	\begin{prooftree}
+		\AxiomC{$\Gamma | \Sigma \vdash t_1 : T_1$}
+		\RightLabel{\textsc{T-Ref}}
+		\UnaryInfC{$\Gamma | \Sigma \vdash \REF~t_1 : \REFT~T_1$}
+	\end{prooftree}
+	ロケーションは評価された時にしか増えない
+	\begin{prooftree}
+		\AxiomC{$\Gamma | \Sigma \vdash t_1 : \REF~T_1$}
+		\RightLabel{\textsc{T-Deref}}
+		\UnaryInfC{$\Gamma \Sigma \vdash~!t_1 : T_1$}
+	\end{prooftree}
+	\begin{prooftree}
+		\AxiomC{$\Gamma | \Sigma \vdash t_1 : \REF~T_1$}
+		\AxiomC{$\Gamma | \Sigma \vdash t_2 : T_1$}
+		\RightLabel{\textsc{T-Assign}}
+		\BinaryInfC{$\Gamma | \Sigma \vdash t_1 := t_2 : \UNITT$}
+	\end{prooftree}
+\end{frame}
+
+\section{安全性}
+
+\begin{frame}
+	\frametitle{安全性}
+	\Large well-typedな項はスタックしないことを証明したい\\
+	型付け関係と評価関係を拡張したため、それに応じた修正が必要
+  \renewcommand{\thedefinition}{13.5.1}
+	\begin{definition}
+		$\texttt{dom}(\mu)=\texttt{dom}(\Sigma)$かつ
+		全ての$l\in\texttt{dom}(\mu)$が成り立つようなlに対して
+		$\Gamma | \Sigma \vdash \mu(l):\Sigma(l)$が成り立つとき、
+		ストア$\mu$は型環境$\Gamma$とストア型付け$\Sigma$の下でwell-typedであるといい、
+		$\Gamma | \Sigma \vdash \mu$と書く。
+	\end{definition}
+\end{frame}
+
+\begin{frame}
+	\frametitle{代入補題}
+	\Large
+  \renewcommand{\thelemma}{13.5.4}
+	\begin{lemma}[代入補題]
+		$\Gamma, x : S | \Sigma \vdash t : T$かつ$\Gamma | \Sigma \vdash s : S$ならば$\Gamma | \Sigma \vdash [x \mapsto s]t : T$
+	\end{lemma}
+	\begin{proof}
+		補題9.3.8と同様に証明できる。\\
+		substitutionは13章で追加された項に対しては特別な操作は行わないため、
+		今回追加された型付け規則の場合も$\textsc{T-App}$などの場合と同様に証明できる。
+	\end{proof}
+\end{frame}
+
+\begin{frame}
+	\frametitle{ストア型付けに対する代入補題}
+	\Large
+  \renewcommand{\thelemma}{13.5.5}
+	\begin{lemma}[ストア型付けに対する代入補題]
+		$(\Gamma | \Sigma \vdash \mu) \land (\Sigma(l)=T) \land (\Gamma | \Sigma \vdash v : T) \Rightarrow (\Gamma | \Sigma \vdash [l \mapsto v]\mu)$
+	\end{lemma}
+	\begin{proof}
+		$\Gamma | \Sigma \vdash v : T$の定義を振り返ると、結論は$\texttt{dom}(\mu)=\texttt{dom}(\Sigma)$と$\forall l' \in \texttt{dom}(\Gamma).~[l \mapsto v]\mu (l') : \Sigma(l')$が成り立てば満たされることが分かる。\\
+		このうち、前者は仮定$\Gamma | \Sigma \vdash \mu$より明らか。\\
+		後者も$l=l'$が成り立つ場合とそうでない場合に分けることで示せる。
+	\end{proof}
+\end{frame}
+
+\begin{frame}
+	\frametitle{ストア型付けの弱化}
+	\Large
+  \renewcommand{\thelemma}{13.5.6}
+	\begin{lemma}[ストア型付けの弱化]
+		$\Gamma | \Sigma \vdash t : T$かつ$\Sigma \subseteq \Sigma'$ならば$\Gamma | \Sigma' \vdash t : T$
+	\end{lemma}
+	\begin{proof}
+		型付けの導出に関する帰納法で証明できる。\\
+		$\Gamma$について言及している規則が殆ど無いので自明。\\
+		今回の定義した型付け規則に関する反転補題も用いるので、適宜証明する。
+	\end{proof}
+\end{frame}
+
+\begin{frame}
+	\frametitle{preservation}
+	\Large
+	\renewcommand{\thetheorem}{13.5.3}
+	\begin{theorem}[preservation]
+		$
+			\begin{array}{c}
+				(\Gamma | \Sigma \vdash t : T) \land (\Gamma | \Sigma \vdash \mu) \land (t | \mu \rightarrow t' | \mu')\\
+				\Rightarrow \exists \Sigma'.~(\Sigma \subseteq \Sigma') \land (\Gamma | \Sigma' \vdash t' : T) \land (\Gamma | \Sigma' \vdash \mu')
+			\end{array}
+		$
+	\end{theorem}
+	\begin{proof}
+		$t | \mu \rightarrow t' | \mu'$の導出に関する帰納法で証明する。\\
+		\textsc{E-AppAbs}の場合\\
+		$t = (\lambda x : T_{11}.~t_{12})~v_2 \qquad t' = [x \mapsto v_2]t_{12} \qquad \mu = \mu'$\\
+		仮定$\Gamma|\Sigma \vdash (\lambda x : T_{11}.~t_{12})~v_2 : T$に反転補題を適用する\\
+		$\Gamma, x : T_{11} | \Sigma \vdash t_{12} : T_{11} \rightarrow T \qquad \Gamma | \Sigma \vdash v_2 : T_{11}$\\
+		代入補題より$\Gamma | \Sigma \vdash [x \mapsto v_2]t_{12} : T$が成り立つので、$\Sigma' = \Sigma$とすればよい。
+	\end{proof}
+\end{frame}
+
+\begin{frame}
+	\frametitle{preservation}
+	\Large
+	\begin{proof}
+		\textsc{E-App1}の場合\\
+		$t = t_1~t_2 \qquad t' = t_1'~t_2 \qquad t_1|\mu \rightarrow t_1' |\mu'$\\
+		仮定$\Gamma | \Sigma \vdash t_1~t_2 : T$に反転補題を適用する。\\
+		$\Gamma | \Sigma \vdash t_1 : R \rightarrow T \qquad \Gamma | \Sigma \vdash t_2 : R$\\
+		帰納法の仮定より
+		$\Sigma \subseteq \Sigma' \qquad \Gamma | \Sigma' \vdash t_1' : R \rightarrow T \qquad \Gamma | \Sigma' \vdash \mu'$\\
+		\textsc{T-App}より$\Gamma | \Sigma' \vdash t_1'~t_2 : T$が成り立つ。
+	\end{proof}
+\end{frame}
+
+\begin{frame}
+	\frametitle{preservation}
+	\Large
+	\begin{proof}
+		\textsc{E-RefV}の場合\\
+		$t = \REF~v_1 \qquad t' = l \qquad \mu' = (\mu, l \mapsto v_1) \qquad l \notin \texttt{dom}(\mu)$\\
+		仮定$\Gamma | \Sigma \vdash \REF~v_1 : T$に反転補題を適用する。\\
+		$\Gamma | \Sigma \vdash v_1 : T_1 \qquad T=\REFT~T_1$\\
+		$\Sigma' = (\Sigma, l \mapsto T_1)$とする。\\
+		$\Sigma \subseteq (\Sigma, l \mapsto T_1)$は自明。\\
+		\textsc{T-Loc}より$\Gamma | (\Sigma, l \mapsto T_1) \vdash l : \REFT~T_1$\\
+		定義より$\Gamma | (\Sigma, l \mapsto T_1) \vdash (\mu, l \mapsto v)$
+	\end{proof}
+\end{frame}
+
+\begin{frame}
+	\frametitle{preservation}
+	\Large
+	\begin{proof}
+		\textsc{E-DerefLoc}の場合\\
+		$t = !l \qquad t' = v \qquad \mu' = \mu \qquad \mu(l)=v$\\
+		仮定$\Gamma | \Sigma \vdash !l : T$に反転補題をくりかえし適用する。\\
+		$\Gamma | \Sigma \vdash l : \REFT~T \qquad \Sigma(l) = T_1$\\
+		$\Sigma'=\Sigma$とする。\\
+		仮定$\Gamma | \Sigma \vdash \mu$の定義より$\Gamma | \Sigma \vdash \mu(l) : \Sigma(l)$\\
+		よって$\Gamma | \Sigma \vdash v : T$
+	\end{proof}
+\end{frame}
+
+\begin{frame}
+	\frametitle{preservation}
+	\Large
+	\begin{proof}
+		\textsc{E-Assign}の場合\\
+		$t = (l:=v_2) \qquad t' = \UNIT \qquad \mu' = [l \mapsto v_2]\mu$\\
+		仮定$\Gamma | \Sigma \vdash (l:=v_2) : T$に反転補題を適用する。\\
+		$\Gamma | \Sigma \vdash l : \REFT~T_{11} \qquad \Gamma | \Sigma \vdash v_2 : T_{11} \qquad T=\UNITT$
+		$\Sigma'=[l \mapsto T_{11}]\Sigma$とする。\\
+		\textsc{T-Unit}より$\Gamma | [l \mapsto T_{11}]\Sigma \vdash \UNIT : \UNITT$ \\
+		定義より$\Gamma | [l \mapsto T_{11}] \vdash [l \mapsto v_2]\mu$\\
+		残りの場合は\textsc{E-App1}と同様に示せる。
+	\end{proof}
+\end{frame}
+
+\begin{frame}
+	\frametitle{progress}
+	\Large
+	\renewcommand{\thetheorem}{13.5.7}
+	\begin{theorem}[progress]
+		$\emptyset | \Sigma \vdash t : T$ならば、$t$は値、または全ての$\emptyset | \Sigma \vdash \mu$が成り立つような$\mu$に対して$t|\mu\rightarrow t'|\mu'$となるような$t'$と$\mu'$が存在する。
+	\end{theorem}
+	\begin{proof}
+		$\emptyset | \Sigma \vdash t : T$の導出に関する帰納法で証明する。\\
+		\textsc{T-Loc}の場合\\
+		ロケーションは値なので自明
+	\end{proof}
+\end{frame}
+
+\begin{frame}
+	\frametitle{progress}
+	\Large
+	\begin{proof}
+		\textsc{T-Ref}の場合\\
+		$t = \REF~t_1 \qquad T = \REFT~T_1 \qquad \emptyset | \Sigma \vdash t_1 : T_1$\\
+		帰納法の仮定より、$t_1$は値、または$t_1|\mu\rightarrow t_1'|\mu' \qquad \emptyset | \Sigma \vdash \mu$\\
+		$t_1$が値$v_1$の場合、\textsc{E-RefV}より$\REF~v_1 | \mu \rightarrow l | (\mu, l \mapsto v_1)$\\
+		$t_2$が値でない場合、\textsc{E-Ref}より$\REF~t_1 | \mu \rightarrow \REF~t_1'$
+	\end{proof}
+\end{frame}
+
+\begin{frame}
+	\frametitle{progress}
+	\Large
+	\begin{proof}
+		\textsc{T-Deref}の場合\\
+		$t = !t_1 \qquad \emptyset | \Sigma \vdash t_1 : \REFT~T$\\
+		帰納法の仮定より、$t_1$は値、または$t_1|\mu\rightarrow t_1'|\mu' \qquad \emptyset | \Sigma \vdash \mu$ \\
+		$t_1$が値の場合、標準形の補題により$t_1$はロケーション$l_1$\\
+		反転補題より$\Sigma(l_1)=T_1$\\
+		$\emptyset | \Sigma \vdash \mu$の定義より$\mu(l_1)=v \qquad \emptyset | \Sigma \vdash v : T_1$\\
+		従って、\textsc{E-DerefLoc}より$!l | \mu \rightarrow v | \mu$ \\
+		$t_1$が値でない場合、\textsc{E-Deref}より$!t_1 | \mu \rightarrow !t_1' | \mu'$
+	\end{proof}
+\end{frame}
+
+\begin{frame}
+	\frametitle{progress}
+	\Large
+	\begin{proof}
+		\textsc{T-Assign}の場合\\
+		$t = (t_1:=t_2) \quad \emptyset | \Sigma \vdash t_1 : \REFT~T_{11} \quad \emptyset | \Sigma \vdash t_2 : T_{11}$\\
+		帰納法の仮定より、$t_1$は値、または$t_1|\mu\rightarrow t_1'|\mu' \qquad \emptyset | \Sigma \vdash \mu$ \\
+		$t_1$が値の場合、標準形の補題により$t_1$はロケーション$l_1$\\
+		帰納法の仮定より、$t_2$は値、または$t_2|\mu\rightarrow t_2'|\mu'$\\
+		$t_2$が値$v_2$の場合、\textsc{E-Assign}より$l_1:=v_2|\mu\rightarrow \UNIT | [l\mapsto v_2]\mu$\\
+		$t_2$が値でない場合、\textsc{E-Assign2}より$l_1:=t_2|\mu \rightarrow l_1:=t_2' | \mu'$\\
+		$t_1$が値でない場合、\textsc{E-Deref}より$!t_1 | \mu \rightarrow !t_1' | \mu'$
+	\end{proof}
+\end{frame}
+
+\end{document}
