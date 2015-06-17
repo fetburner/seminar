@@ -9,7 +9,7 @@ DVIPDFM = dvipdfmx
 DVIPDFMFLAGS = -p a4
 
 # 変更を監視するファイル
-TEXDEPS[] = $(TARGET).tex beamerthemesumiilab.sty $(glob i,*.eps)
+TEXDEPS[] = $(TARGET).tex beamerthemesumiilab.sty $(glob i,*.eps) $(addsuffix .xbb, $(removesuffix $(glob *.jpg)))
 
 .PHONY: all clean
 
@@ -18,4 +18,7 @@ LaTeXDocument($(TARGET), $(TARGET))
 .DEFAULT: $(TARGET).pdf $(TARGET).dvi
 
 clean:
-	rm -rf *.acn *.acr *.alg *.aux *.bbl *.blg *.dvi *.fdb_latexmk *.glg *.glo *.gls *.idx *.ilg *.ind *.ist *.lof *.log *.lot *.maf *.mtc *.mtc0 *.nav *.nlo *.out *.pdfsync *.ps *.snm *.synctex.gz *.toc *.vrb *.xdy *.tdo *.fls
+	rm -rf *.acn *.acr *.alg *.aux *.bbl *.blg *.dvi *.fdb_latexmk *.glg *.glo *.gls *.idx *.ilg *.ind *.ist *.lof *.log *.lot *.maf *.mtc *.mtc0 *.nav *.nlo *.out *.pdfsync *.ps *.snm *.synctex.gz *.toc *.vrb *.xdy *.tdo *.fls *.xbb
+
+%.xbb: %.jpg
+    ebb -x $<
