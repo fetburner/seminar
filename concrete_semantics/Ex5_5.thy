@@ -1,3 +1,4 @@
+(* Excercise 5.5 2015/7/17 MIZUNO MASAYUKI *)
 theory Ex5_5 
 imports Main
 begin
