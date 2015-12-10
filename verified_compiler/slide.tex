@@ -1,0 +1,452 @@
+\documentclass[dvipdfmx,cjk,xcolor=dvipsnames,envcountsect,notheorems,aspectratio=169]{beamer}
+
+\usepackage{amsmath,amssymb,amsfonts,amsthm,ascmac,cases,pifont}
+\usepackage{graphicx}
+\usepackage{bussproofs}
+\usepackage{etex}
+
+\usetheme{sumiilab}
+
+\title{A Verified Compiler for an Impure Functional Language}
+\author{水野 雅之}
+\date{\today}
+
+\AtBeginSection[]{
+\begin{frame}
+	\frametitle{Outline}
+  \tableofcontents[sectionstyle=show/shaded,subsectionstyle=show/show/hide]
+\end{frame}}
+
+\setbeamertemplate{theorems}[numbered]
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+\newtheorem{axiom}{Axiom}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{corollary}{Corollary}
+\newtheorem{proposition}{Proposition}
+
+\usepackage{listings}
+\lstset{
+  language={[Objective]Caml},
+  basicstyle={\ttfamily\small},
+  keywordstyle={\bfseries},
+  commentstyle={},
+  stringstyle={},
+  frame=trlb,
+  numbers=none,
+  numberstyle={},
+  xleftmargin=5pt,
+  xrightmargin=5pt,
+  keepspaces=true,
+  moredelim=[is][\itshape]{@/}{/@},
+  moredelim=[is][\color{red}]{@r\{}{\}@},
+  moredelim=[is][\color{blue}]{@b\{}{\}@},
+  moredelim=[is][\color{DarkGreen}]{@g\{}{\}@},
+}
+
+\newcommand{\FIX}{\texttt{fix}}
+\newcommand{\LET}{\texttt{let}}
+\newcommand{\IN}{\texttt{in}}
+\newcommand{\FST}{\texttt{fst}}
+\newcommand{\SND}{\texttt{snd}}
+\newcommand{\INL}{\texttt{inl}}
+\newcommand{\INR}{\texttt{inr}}
+\newcommand{\CASE}{\texttt{case}}
+\newcommand{\OF}{\texttt{of}}
+\newcommand{\REF}{\texttt{ref}}
+\newcommand{\RAISE}{\texttt{raise}}
+\newcommand{\HANDLE}{\texttt{handle}}
+\newcommand{\HALT}{\texttt{halt}}
+\newcommand{\FAIL}{\texttt{fail}}
+\newcommand{\JMP}{\texttt{jmp}}
+\newcommand{\ANS}{\texttt{Ans}}
+\newcommand{\EX}{\texttt{Ex}}
+\newcommand{\METALAMBDA}{\mathop{\lambda}\limits^\wedge}
+
+\begin{document}
+\frame[plain]{\titlepage}
+
+\section*{(My) Motivation}
+
+\begin{frame}
+  \frametitle{Motivation}
+	\LARGE Planning to verify MinCaml for graduate thesis
+
+	There are several previous reserches (such as CompCert) but...
+
+	\vfill
+
+	MinCaml features
+	\begin{itemize}
+		\item First class functions
+		\item Impure operations
+		\item Foreign function interface
+	\end{itemize}
+	
+	\vfill
+
+	Thus tried to survey closely related paper
+
+	"A Verified Compiler for an Impure Functional Language"
+\end{frame}
+
+\section*{A Verified Compiler for an Impure Functional Language?}
+
+\begin{frame}
+  \frametitle{A Verified Compiler for an Impure Functional Language?}
+	\LARGE Adam Chlipala, POPL10
+
+	\vfill
+
+	verifies impure functional language with Coq
+	{\Large \[
+		\begin{array}{lcl}
+			e & ::= & c~|~e=e~|~x~|~e~e~|~\FIX~f(x).~e~|~\LET~x=e~\IN~e \\
+				&     & |~()~|~\langle e,e\rangle~|~\FST(e)~|~\SND(e)~|~\INL(e)~|~\INR(e) \\
+				&     & |~\CASE~e~\OF~\INL(x)\Rightarrow e~|~\INR(x)\Rightarrow e \\
+				&     & |~\REF(e)~|~!e~|~e := e~|~\RAISE(e)~|~e~\HANDLE~x\Rightarrow e
+		\end{array}
+	\]}
+	$\rightarrow$ close to MinCaml's source language
+\end{frame}
+
+\section*{Outline}
+
+\begin{frame}
+  \frametitle{Outline}
+  \tableofcontents[sectionstyle=show,subsectionstyle=hide]
+\end{frame}
+
+\section{Introduction}
+
+\begin{frame}
+	\frametitle{Introduction}
+	\LARGE A lot of sucks around mechanized proof
+	\begin{itemize}
+		\item wrong abstractions (e.g. nested variable binders)
+		\item copious lemma and case analysis
+		\item Once add a new constructor, Modify proof anywhere
+	\end{itemize}
+
+	\vfill
+
+	Proposing "engineering" approach to reduce development costs
+	\begin{itemize}
+		\item {\it Parametric Higher-Order Abstract Syntax}
+		\item new semantic approach
+		\item sophisticated proof automation
+	\end{itemize}
+\end{frame}
+
+\begin{frame}
+	\frametitle{Source Language}
+	\LARGE untyped, subset of ML
+	{\Large \[
+		\begin{array}{lcl}
+			e & ::= & c~|~e=e~|~x~|~e~e~|~\FIX~f(x).~e~|~\LET~x=e~\IN~e \\
+				&     & |~()~|~\langle e,e\rangle~|~\FST(e)~|~\SND(e)~|~\INL(e)~|~\INR(e) \\
+				&     & |~\CASE~e~\OF~\INL(x)\Rightarrow e~|~\INR(x)\Rightarrow e \\
+				&     & |~\REF(e)~|~!e~|~e := e~|~\RAISE(e)~|~e~\HANDLE~x\Rightarrow e
+		\end{array}
+	\]}
+
+	no variable-arity features (e.g. sum, product)
+
+	no compound pattern matching
+\end{frame}
+
+\begin{frame}
+	\frametitle{Target Assembly Language Syntax}
+	\LARGE idealized assembly language
+	{\Large \[
+		\begin{array}{lcl}
+			r & ::= & r_0~|~\ldots~|~r_{N-1}\\
+			n & \in & \mathbb{N} \\
+			L & ::= & r~|~[r+n]~|~[n] \\
+			R & ::= & n~|~r~|~[r+n]~|~[n] \\
+			I & ::= & L::=R~|~r\mathop{=}\limits^+n~|~L:=R\mathop{=}\limits^?R~|~\texttt{jnz}~R,n \\
+			J & ::= & \HALT~R~|~\FAIL~R~|~\JMP~R \\
+			B & ::= & (I^*,J) \\
+			P & ::= & (B^*,B)
+		\end{array}
+	\]}
+	finite registers and no interface for memory managements
+\end{frame}
+
+\begin{frame}
+	\frametitle{Source Language Semantics}
+	\LARGE big step operational semantics $(h_1, e) \Downarrow (h_2, r)$
+	{\footnotesize \begin{prooftree}
+		\AxiomC{}
+		\UnaryInfC{$(h, \FIX~f(x).~e) \Downarrow (h, \ANS(\FIX~f(x).~e))$}
+	\end{prooftree}
+
+	\begin{prooftree}
+		\AxiomC{$(h_1, e_1) \Downarrow (h_2, \ANS(\FIX~f(x).~e))$}
+		\AxiomC{$(h_2, e_2) \Downarrow (h_3, \ANS(e'))$}
+		\AxiomC{$(h_3, e[f \mapsto \FIX~f(x).~e][x \mapsto e']) \Downarrow (h_4, r) $}
+		\TrinaryInfC{$(h_1, e_1~e_2) \Downarrow (h_4, r)$}
+	\end{prooftree}
+
+	\begin{prooftree}
+		\AxiomC{$(h_1, e) \Downarrow (h_2, \EX(v))$}
+		\UnaryInfC{$(h_1, e_1~e_2) \Downarrow (h_3, \EX(v))$}
+	\end{prooftree}
+
+	\begin{prooftree}
+		\AxiomC{$(h_1, e_1) \Downarrow (h_2, \ANS(\FIX~f(x).~e))$}
+		\AxiomC{$(h_2, e_2) \Downarrow (h_3, \EX(v))$}
+		\BinaryInfC{$(h_1, e_1~e_2) \Downarrow (h_3, \EX(v))$}
+	\end{prooftree}
+
+	\begin{prooftree}
+		\AxiomC{$(h_1, e) \Downarrow (h_2, \ANS(v))$}
+		\UnaryInfC{$(h_1, \REF(e)) \Downarrow (v :: h_2, \ANS(\REF(|h_2|)))$}
+	\end{prooftree}
+
+	\begin{prooftree}
+		\AxiomC{$(h_1, e) \Downarrow (h_2, \ANS(\REF(n)))$}
+		\AxiomC{$h_2.n=v$}
+		\BinaryInfC{$(h_1, !e) \Downarrow (h_2, \ANS(v))$}
+	\end{prooftree}}
+\end{frame}
+
+\begin{frame}
+	\frametitle{Source Language Semantics}
+	\LARGE {\footnotesize \begin{prooftree}
+		\AxiomC{$(h_1, e) \Downarrow (h_2, \ANS(v))$}
+		\UnaryInfC{$(h_1, \RAISE(e)) \Downarrow (h_2, \EX(v))$}
+	\end{prooftree}
+
+	\begin{prooftree}
+		\AxiomC{$(h_1, e_1) \Downarrow (h_2, \EX(v))$}
+		\AxiomC{$(h_2, e_2[x \mapsto v]) \Downarrow (h_3, r) $}
+		\BinaryInfC{$(h_1, e_1~\HANDLE~x\Rightarrow e_2) \Downarrow (h_3, r)$}
+	\end{prooftree}}
+	Theorems ignore non-termination.
+\end{frame}
+
+\section{Parametric Higher-Order Abstract Syntax}
+
+\begin{frame}[fragile]
+	\frametitle{Motivation (Parametric Higher-Order Abstract Syntax)}
+	\LARGE Treating nested variable binders concretely is confused
+	\begin{itemize}
+		\item capture (e.g. $[x \mapsto y](\lambda y.~x)$)
+		\item shadowing (e.g. $[x \mapsto y](\lambda x.~x)$)
+	\end{itemize}
+\begin{lstlisting}
+Inductive exp : Type :=
+  | Var : string -> exp
+  | App : exp -> exp -> exp
+  | Abs : string -> exp -> exp.
+
+Check (Abs ""x"" (Abs ""y"" (Var ""x""))).
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+	\frametitle{Higher-Order Abstract Syntax}
+	\LARGE Embedded binders into meta language
+\begin{lstlisting}
+Inductive exp : Type :=
+  | App : exp -> exp -> exp
+  | Abs : (exp -> exp) -> exp.
+
+Check (Abs (fun x => Abs (fun y => x))).
+\end{lstlisting}
+	But Coq does not accept it because of non-termination
+
+	\vfill
+
+	{\Large Does this OCaml program terminate?}
+\begin{lstlisting}
+type exp =
+  | App of exp * exp
+  | Abs of (exp -> exp)
+
+let delta (Abs m as n) = m n;;
+delta (Abs delta);;
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+	\frametitle{HOAS sucks}
+	\LARGE Hard to deconstruct
+
+	\vfill
+	How do we pretty-print "Abs (fun x $\rightarrow$ x)"?
+\begin{lstlisting}
+let rec to_string : exp -> string = function
+  | App (m, n) -> to_string m ^ " " ^ to_string n
+  | Abs f -> (* !!!! *)
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+	\frametitle{Parametric Higher-Order Abstract Syntax}
+	\LARGE Represent binders as function over variable
+
+	Guarantee well-formedness using parametricity
+\begin{lstlisting}
+Inductive exp var : Type :=
+  | Var : var -> exp var
+  | App : exp var -> exp var -> exp var
+  | Abs : (var -> exp var) -> exp var.
+
+Definition Exp := forall var : Type, exp var.
+Check (fun var => Abs var (fun x => Abs var (fun y => Var var x))).
+\end{lstlisting}
+	Coq accept it
+\end{frame}
+
+\begin{frame}[fragile]
+	\frametitle{happiness of PHOAS}
+	\LARGE easier to deconstruct
+\begin{lstlisting}
+let rec to_string : string exp -> string = function
+  | Var x -> x
+  | App (m, n) -> to_string m ^ " " ^ to_string n
+  | Abs f -> let x = gensym () in "(fun " ^ x ^ " -> " ^ f x ^ ")"
+\end{lstlisting}
+	substitution is easily implementable
+\begin{lstlisting}
+Fixpoint flatten var (e : exp (exp var)) : exp var :=
+  match e with
+  | Var x => x
+  | App m n => App _ (flatten _ m) (flatten _ n)
+  | Abs f => Abs _ (fun x => flatten _ (f (Var x)))
+  end.
+Definition Subst (E : forall var, var -> exp var) (E' : Exp) : Exp
+  := fun var => flatten (E _ E').
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}
+	\frametitle{PHOAS specific features}
+	\LARGE Correctness proofs usually parametricity
+
+	Axiomatize equivalence and Formalize parametricity
+	{\footnotesize \begin{prooftree}
+		\AxiomC{$(x_1, x_2) \in \Gamma$}
+		\UnaryInfC{$\Gamma \vdash \#x_1 \sim \#x_2$}
+	\end{prooftree}
+
+	\begin{prooftree}
+		\AxiomC{$\Gamma \vdash e_1 \sim e_1'$}
+		\AxiomC{$\Gamma \vdash e_2 \sim e_2'$}
+		\BinaryInfC{$\Gamma \vdash e_1~e_2 \sim e_1'~e_2'$}
+	\end{prooftree}
+
+	\begin{prooftree}
+		\AxiomC{$\forall x_1 x_2.~\Gamma, (x_1, x_2) \vdash f_1(x_1) \sim f_2(x_2)$}
+		\UnaryInfC{$\Gamma \vdash \lambda f_1 \sim \lambda f_2$}
+	\end{prooftree}}
+
+	{\Large \begin{definition}[well-formedness]
+		E is well-formed if, for any $\texttt{var}_1$ and $\texttt{var}_2$, we have $\cdot \vdash E(\texttt{var}_1) \sim E(\texttt{var}_2)$
+\end{definition}}
+\end{frame}
+
+\section{Substitution-Free Operational Semantics}
+
+\begin{frame}[fragile]
+	\frametitle{Substitution-Free Operational Semantics}
+	\LARGE Define semantics over instantiated term (i.e. exp val)
+
+	\vfill
+
+	Coq rejects naive definition of value
+\begin{lstlisting}
+Inductive val : Type :=
+  | VAbs : (val -> exp val) -> val.
+\end{lstlisting}
+	Solution: Represent value as pointer to closure
+\begin{lstlisting}
+Definition val := nat.
+Definition closure := val -> exp val.
+Definition heap := list closure.
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+	\frametitle{Substitution-Free Operational Semantics}
+	\LARGE This technique can be generalized to the full source language
+\begin{lstlisting}
+Inductive val : Type :=
+  | VFunc : label -> val
+  | VUnit : val
+  | VPair : val -> val -> val
+  | VInl : val -> val
+  | VInr : val -> val
+  | VRef : label -> val.
+\end{lstlisting}
+
+	\vfill
+
+	Surprisingly, the change reduces hassle in mechanized proofs
+\end{frame}
+
+\section{Main Compiler Phases Phases}
+
+\subsection{PHOASification}
+
+\begin{frame}
+	\frametitle{PHOASification}
+	\LARGE To let final theorem independent of PHOAS, beginning with a de Bruijn index
+
+	Translate de Bruijn index style programs into PHOAS style
+	{\Large \[
+		\begin{array}{rcl}
+			\lfloor \# x \rfloor \sigma & = & \#(\sigma . x) \\
+			\lfloor e_1~e_2 \rfloor \sigma & = & \lfloor e_1 \rfloor \sigma ~ \lfloor e_2 \rfloor \sigma \\
+			\lfloor \FIX~f(x).~e_1 \rfloor \sigma & = & \FIX(\METALAMBDA f.~\METALAMBDA x.~ \lfloor e_1 \rfloor (x :: f :: \sigma))
+		\end{array}
+	\]}
+\end{frame}
+
+\begin{frame}
+	\frametitle{Correctness Proof}
+	\LARGE Formalize correspondence and prove monotonicity
+	{\Large \begin{lemma}
+		For any $e$ and $\sigma$ with compatible type indices, if e contains no uses of \$, then $\cdot, \sigma \vdash e \simeq \lfloor e \rfloor \sigma$
+	\end{lemma}
+
+	\begin{lemma}
+		If $(h_1, e) \Downarrow (h_2, r)$ at source level, $H, \sigma \vdash e \simeq e'$ and $H \vdash h_1 \simeq h_1'$,
+
+		then there exist $H'$, $h_2'$ and $r'$ such that
+		$(H, h_1', e') \Downarrow (H', h_2', r')$, $H' \vdash r \simeq r'$ and $H' \vdash h_2 \simeq h_2'$
+	\end{lemma}}
+\end{frame}
+
+\subsection{CPS Translation}
+
+\begin{frame}
+	\frametitle{CPS Translation}
+	\LARGE convert syntax trees to CPS syntax tree
+	{\Large \[
+		\begin{array}{rcl}
+			p & ::= & c~|~x=x~|~\FIX~f(x).~e~|~()~|~\langle x, x \rangle~|~\INL(x)~|~\INR(x) \\
+			  &     & |~\REF(x)~|~!x~|~x:=x \\
+			e & ::= & \HALT(x)~|~\FAIL(x)~|~x~x~|~\LET~x=p~\IN~e \\
+			  &     & |~\CASE~x~\OF~\INL(x)\Rightarrow e~|~\INR(x)\Rightarrow e
+		\end{array}
+	\]
+
+	\[
+		\begin{array}{rcl}
+			\lfloor \#x \rfloor k_S k_E & = & k_S(x) \\
+			\lfloor \RAISE(e) \rfloor k_S k_E & = & \lfloor e \rfloor (\METALAMBDA x.~k_E(x)) k_E \\
+			\lfloor \LET~x=e_1~\IN~e_2 \rfloor k_S k_E & = & \lfloor e_1 \rfloor (\METALAMBDA x. \lfloor e_2 \rfloor k_S k_E) k_E
+		\end{array}
+	\]}
+\end{frame}
+
+\subsection{Closure Conversion}
+
+\subsection{Code Genration}
+
+\end{document}
+

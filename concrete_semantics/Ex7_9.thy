@@ -37,6 +37,7 @@ WhileFalse: "\<not>bval b s \<Longrightarrow> (WHILE b DO c,s) \<Rightarrow> s" 
 WhileTrue:
 "\<lbrakk> bval b s\<^sub>1;  (c,s\<^sub>1) \<Rightarrow> s\<^sub>2;  (WHILE b DO c, s\<^sub>2) \<Rightarrow> s\<^sub>3 \<rbrakk> 
 \<Longrightarrow> (WHILE b DO c, s\<^sub>1) \<Rightarrow> s\<^sub>3" |
+(********************************************************)
 OrL: "(c\<^sub>1,s) \<Rightarrow> t \<Longrightarrow> (c\<^sub>1 OR c\<^sub>2, s) \<Rightarrow> t" |
 OrR: "(c\<^sub>2,s) \<Rightarrow> t \<Longrightarrow> (c\<^sub>1 OR c\<^sub>2, s) \<Rightarrow> t"
 text_raw{*}%endsnip*}
@@ -47,6 +48,7 @@ inductive_cases AssignE[elim!]: "(x ::= a,s) \<Rightarrow> t"
 inductive_cases SeqE[elim!]: "(c1;;c2,s1) \<Rightarrow> s3"
 inductive_cases IfE[elim!]: "(IF b THEN c1 ELSE c2,s) \<Rightarrow> t"
 inductive_cases WhileE[elim]: "(WHILE b DO c,s) \<Rightarrow> t"
+(********************************************************)
 inductive_cases OrE[elim]: "(c1 OR c2,s) \<Rightarrow> t"
 
 text_raw{*\snip{BigStepEquiv}{0}{1}{% *}
@@ -55,6 +57,7 @@ abbreviation
   "c \<sim> c' \<equiv> (\<forall>s t. (c,s) \<Rightarrow> t  =  (c',s) \<Rightarrow> t)"
 text_raw{*}%endsnip*}
 
+(********************************************************)
 theorem or_comm: "(c\<^sub>1 OR c\<^sub>2) \<sim> (c\<^sub>2 OR c\<^sub>1)" by blast
 
 inductive
@@ -70,6 +73,7 @@ inductive
 
   While:   "(WHILE b DO c,s) \<rightarrow>
               (IF b THEN c;; WHILE b DO c ELSE SKIP,s)" |
+(*******************************************************)
   OrL:     "(c\<^sub>1 OR c\<^sub>2,s) \<rightarrow> (c\<^sub>1,s)" |
   OrR:     "(c\<^sub>1 OR c\<^sub>2,s) \<rightarrow> (c\<^sub>2,s)"
 
@@ -83,6 +87,7 @@ inductive_cases AssignES[elim!]: "(x::=a,s) \<rightarrow> ct"
 inductive_cases SeqES[elim]: "(c1;;c2,s) \<rightarrow> ct"
 inductive_cases IfES[elim!]: "(IF b THEN c1 ELSE c2,s) \<rightarrow> ct"
 inductive_cases WhileES[elim]: "(WHILE b DO c, s) \<rightarrow> ct"
+(*******************************************************)
 inductive_cases OrES[elim]: "(c1 OR c2,s) \<rightarrow> ct"
 
 lemma star_seq2: "(c1,s) \<rightarrow>* (c1',s') \<Longrightarrow> (c1;;c2,s) \<rightarrow>* (c1';;c2,s')"
@@ -140,6 +145,7 @@ next
   moreover have "(?if, s) \<rightarrow> (c;; ?w, s)" by (simp add: b)
   moreover have "(c;; ?w,s) \<rightarrow>* (SKIP,t)" by(rule seq_comp[OF c w])
   ultimately show "(WHILE b DO c,s) \<rightarrow>* (SKIP,t)" by (metis star.simps)
+(*******************************************************)
 next
   fix c\<^sub>1 s t c\<^sub>2
   show "(c\<^sub>1 OR c\<^sub>2, s) \<rightarrow>* (SKIP, t)" by (metis star.simps)
@@ -167,6 +173,7 @@ next
   case WhileTrue
   thus ?case
     by(metis While seq_comp small_step.IfTrue star.step[of small_step])
+(*******************************************************)
 next
   case OrL thus ?case by (blast intro: star.step)
 next
