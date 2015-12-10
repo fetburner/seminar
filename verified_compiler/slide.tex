@@ -1,0 +1,237 @@
+\documentclass[dvipdfmx,cjk,xcolor=dvipsnames,envcountsect,notheorems,aspectratio=169]{beamer}
+
+\usepackage{amsmath,amssymb,amsfonts,amsthm,ascmac,cases,pifont}
+\usepackage{pxjahyper}
+\usepackage{graphicx}
+\usepackage{url}
+\usepackage{bussproofs}
+
+\usetheme{sumiilab}
+
+\title{A Verified Compiler for an Impure Functional Language}
+\author{水野 雅之}
+\date{\today}
+
+\AtBeginSection[]{
+\begin{frame}
+	\frametitle{Outline}
+  \tableofcontents[sectionstyle=show/shaded,subsectionstyle=show/show/hide]
+\end{frame}}
+
+\setbeamertemplate{theorems}[numbered]
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+\newtheorem{axiom}{Axiom}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{corollary}{Corollary}
+\newtheorem{proposition}{Proposition}
+
+\usepackage{listings}
+\lstset{
+  language={[Objective]Caml},
+  basicstyle={\ttfamily\small},
+  keywordstyle={\bfseries},
+  commentstyle={},
+  stringstyle={},
+  frame=trlb,
+  numbers=none,
+  numberstyle={},
+  xleftmargin=5pt,
+  xrightmargin=5pt,
+  keepspaces=true,
+  moredelim=[is][\itshape]{@/}{/@},
+  moredelim=[is][\color{red}]{@r\{}{\}@},
+  moredelim=[is][\color{blue}]{@b\{}{\}@},
+  moredelim=[is][\color{DarkGreen}]{@g\{}{\}@},
+}
+
+\newcommand{\FIX}{\texttt{fix}}
+\newcommand{\LET}{\texttt{let}}
+\newcommand{\IN}{\texttt{in}}
+\newcommand{\FST}{\texttt{fst}}
+\newcommand{\SND}{\texttt{snd}}
+\newcommand{\INL}{\texttt{inl}}
+\newcommand{\INR}{\texttt{inr}}
+\newcommand{\CASE}{\texttt{case}}
+\newcommand{\OF}{\texttt{of}}
+\newcommand{\REF}{\texttt{ref}}
+\newcommand{\RAISE}{\texttt{raise}}
+\newcommand{\HANDLE}{\texttt{handle}}
+\newcommand{\HALT}{\texttt{halt}}
+\newcommand{\FAIL}{\texttt{fail}}
+\newcommand{\JMP}{\texttt{jmp}}
+\newcommand{\ANS}{\texttt{Ans}}
+\newcommand{\EX}{\texttt{Ex}}
+
+\begin{document}
+\frame[plain]{\titlepage}
+
+\section*{(My) Motivation}
+
+\begin{frame}
+  \frametitle{Motivation}
+	\LARGE Planning to verify MinCaml for graduate thesis
+
+	There are several previous reserches (such as CompCert) but...
+
+	\vfill
+
+	MinCaml features
+	\begin{itemize}
+		\item First class functions
+		\item Impure operations
+		\item Foreign function interface
+	\end{itemize}
+	
+	\vfill
+
+	Thus tried to survey closely related paper
+
+	"A Verified Compiler for an Impure Functional Language"
+\end{frame}
+
+\section*{A Verified Compiler for an Impure Functional Language?}
+
+\begin{frame}
+  \frametitle{A Verified Compiler for an Impure Functional Language?}
+	\LARGE Adam Chlipala, POPL10
+
+	\vfill
+
+	verifies impure functional language with Coq
+	\[
+		\begin{array}{lcl}
+			e & ::= & c~|~e=e~|~x~|~e~e~|~\FIX~f(x).~e~|~\LET~x=e~\IN~e \\
+				&     & |~()~|~\langle e,e\rangle~|~\FST(e)~|~\SND(e)~|~\INL(e)~|~\INR(e) \\
+				&     & |~\CASE~e~\OF~\INL(x)\Rightarrow e~|~\INR(x)\Rightarrow e \\
+				&     & |~\REF(e)~|~!e~|~e := e~|~\RAISE(e)~|~e~\HANDLE~x\Rightarrow e
+		\end{array}
+	\]
+	$\rightarrow$ close to MinCaml's source language
+\end{frame}
+
+\section*{Outline}
+
+\begin{frame}
+  \frametitle{Outline}
+  \tableofcontents[sectionstyle=show,subsectionstyle=hide]
+\end{frame}
+
+\section{Introduction}
+
+\begin{frame}
+	\frametitle{Introduction}
+	\LARGE A lot of sucks around mechanized proof
+	\begin{itemize}
+		\item wrong abstractions (e.g. nested variable binders)
+		\item copious lemma and case analysis
+		\item Once add a new constructor, Modify proof anywhere
+	\end{itemize}
+
+	\vfill
+
+	Proposing "engineering" approach to reduce development costs
+	\begin{itemize}
+		\item {\it Parametric Higher-Order Abstract Syntax}
+		\item new semantic approach
+		\item sophisticated proof automation
+	\end{itemize}
+\end{frame}
+
+\begin{frame}
+	\frametitle{Source Language}
+	\LARGE untyped, subset of ML
+	\[
+		\begin{array}{lcl}
+			e & ::= & c~|~e=e~|~x~|~e~e~|~\FIX~f(x).~e~|~\LET~x=e~\IN~e \\
+				&     & |~()~|~\langle e,e\rangle~|~\FST(e)~|~\SND(e)~|~\INL(e)~|~\INR(e) \\
+				&     & |~\CASE~e~\OF~\INL(x)\Rightarrow e~|~\INR(x)\Rightarrow e \\
+				&     & |~\REF(e)~|~!e~|~e := e~|~\RAISE(e)~|~e~\HANDLE~x\Rightarrow e
+		\end{array}
+	\]
+	no variable-arity features (e.g. sum, product)
+
+	no compound pattern matching
+\end{frame}
+
+\begin{frame}
+	\frametitle{Target Assembly Language Syntax}
+	\LARGE idealized assembly language
+	{\Large \[
+		\begin{array}{lcl}
+			r & ::= & r_0~|~\ldots~|~r_{N-1}\\
+			n & \in & \mathbb{N} \\
+			L & ::= & r~|~[r+n]~|~[n] \\
+			R & ::= & n~|~r~|~[r+n]~|~[n] \\
+			I & ::= & L::=R~|~r\mathop{=}\limits^+n~|~L:=R\mathop{=}\limits^?R~|~\texttt{jnz}~R,n \\
+			J & ::= & \HALT~R~|~\FAIL~R~|~\JMP~R \\
+			B & ::= & (I^*,J) \\
+			P & ::= & (B^*,B)
+		\end{array}
+	\]}
+	finite registers and no interface for memory managements
+\end{frame}
+
+\begin{frame}
+	\frametitle{Source Language Semantics}
+	\LARGE big step operational semantics $(h_1, e) \Downarrow (h_2, r)$
+	{\footnotesize \begin{prooftree}
+		\AxiomC{}
+		\UnaryInfC{$(h, \FIX~f(x).~e) \Downarrow (h, \ANS(\FIX~f(x).~e))$}
+	\end{prooftree}
+
+	\begin{prooftree}
+		\AxiomC{$(h_1, e_1) \Downarrow (h_2, \ANS(\FIX~f(x).~e))$}
+		\AxiomC{$(h_2, e_2) \Downarrow (h_3, \ANS(e'))$}
+		\AxiomC{$(h_3, e[f \mapsto \FIX~f(x).~e][x \mapsto e']) \Downarrow (h_4, r) $}
+		\TrinaryInfC{$(h_1, e_1~e_2) \Downarrow (h_4, r)$}
+	\end{prooftree}
+
+	\begin{prooftree}
+		\AxiomC{$(h_1, e) \Downarrow (h_2, \EX(v))$}
+		\UnaryInfC{$(h_1, e_1~e_2) \Downarrow (h_3, \EX(v))$}
+	\end{prooftree}
+
+	\begin{prooftree}
+		\AxiomC{$(h_1, e_1) \Downarrow (h_2, \ANS(\FIX~f(x).~e))$}
+		\AxiomC{$(h_2, e_2) \Downarrow (h_3, \EX(v))$}
+		\BinaryInfC{$(h_1, e_1~e_2) \Downarrow (h_3, \EX(v))$}
+	\end{prooftree}
+
+	\begin{prooftree}
+		\AxiomC{$(h_1, e) \Downarrow (h_2, \ANS(v))$}
+		\UnaryInfC{$(h_1, \REF(e)) \Downarrow (v :: h_2, \ANS(\REF(|h_2|)))$}
+	\end{prooftree}
+
+	\begin{prooftree}
+		\AxiomC{$(h_1, e) \Downarrow (h_2, \ANS(\REF(n)))$}
+		\AxiomC{$h_2.n=v$}
+		\BinaryInfC{$(h_1, !e) \Downarrow (h_2, \ANS(v))$}
+	\end{prooftree}}
+\end{frame}
+
+\begin{frame}
+	\frametitle{Source Language Semantics}
+	\LARGE {\footnotesize \begin{prooftree}
+		\AxiomC{$(h_1, e) \Downarrow (h_2, \ANS(v))$}
+		\UnaryInfC{$(h_1, \RAISE(e)) \Downarrow (h_2, \EX(v))$}
+	\end{prooftree}
+
+	\begin{prooftree}
+		\AxiomC{$(h_1, e_1) \Downarrow (h_2, \EX(v))$}
+		\AxiomC{$(h_2, e_2[x \mapsto v]) \Downarrow (h_3, r) $}
+		\BinaryInfC{$(h_1, e_1~\HANDLE~x\Rightarrow e_2) \Downarrow (h_3, r)$}
+	\end{prooftree}}
+	Theorems ignore non-termination.
+\end{frame}
+
+\section{Parametric Higher-Order Abstract Syntax}
+
+\begin{frame}
+	\frametitle{Parametric Higher-Order Abstract Syntax}
+	
+\end{frame}
+
+\end{document}
+
